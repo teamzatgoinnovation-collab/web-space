@@ -100,8 +100,8 @@ function siteHelpLine(site: SiteUsageRow): string {
 
 function SkeletonBlock({ className }: { className?: string }) {
   return (
-    <div
-      className={`animate-pulse rounded-lg bg-[var(--space-ink)]/[0.08] ${className || ""}`}
+    <span
+      className={`inline-block animate-pulse rounded-lg bg-[var(--space-ink)]/[0.08] ${className || ""}`}
       aria-hidden
     />
   );
