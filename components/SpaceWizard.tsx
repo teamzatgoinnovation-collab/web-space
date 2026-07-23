@@ -81,15 +81,23 @@ function resolveStageStatus(
   stepId: string,
   stepIndex: number,
   job: JobView | null,
+  jobId?: string | null,
 ): string {
   const live = job?.stages.find((s) => s.id === stepId);
   if (live?.status) return live.status;
   if (job?.status === "succeeded") return "succeeded";
+  if (job?.status === "failed" && stepIndex === 0 && (!job.stages || job.stages.length === 0)) {
+    return "failed";
+  }
   if (job?.status === "running" && job.stages.some((s) => s.status === "running")) {
     const runningIdx = INSTALL_STEPS.findIndex(
       (s) => job.stages.find((x) => x.id === s.id)?.status === "running",
     );
     if (stepIndex < runningIdx) return "succeeded";
+  }
+  // Soft "running" on first step until real stages arrive
+  if (jobId && stepIndex === 0 && (!job || job.stages.length === 0) && job?.status !== "failed") {
+    return "running";
   }
   return "pending";
 }
@@ -123,25 +131,53 @@ export function SpaceWizard() {
 
   useEffect(() => {
     if (!jobId) return;
+    let misses = 0;
     const t = setInterval(() => {
       void fetch(`/api/jobs/${jobId}`)
-        .then((r) => r.json())
-        .then((d) => {
-          if (d.ok) setJob(d.job);
+        .then(async (r) => {
+          const d = await r.json();
+          if (d.ok && d.job) {
+            misses = 0;
+            setJob(d.job);
+            return;
+          }
+          misses += 1;
+          // Job store lost (dev reload) or never created — fail clearly for the user
+          if (r.status === 404 && misses >= 3) {
+            setJob({
+              id: jobId,
+              status: "failed",
+              stages: [{ id: "validate", label: "Checking your site name", status: "failed" }],
+              error:
+                "Installation lost connection to the server job. Please click Try again.",
+            });
+          }
+        })
+        .catch(() => {
+          misses += 1;
         });
     }, 1500);
     return () => clearInterval(t);
   }, [jobId]);
 
-  // Advance soft % on the active step: 20% → 50% → 80%
+  // Soft progress while waiting for first stage, then 20 → 50 → 80 on active step
   useEffect(() => {
+    if (!jobId) return;
+    if (job?.status === "failed" || job?.status === "succeeded") return;
+
     const running = job?.stages.find((s) => s.status === "running");
-    const id = running?.id || null;
-    if (id !== activeRunningId) {
+    const id = running?.id || (job?.status === "queued" || !job ? "__queued__" : null);
+
+    if (id && id !== activeRunningId) {
       setActiveRunningId(id);
       setRunningLevel(20);
     }
-    if (!id || job?.status === "failed" || job?.status === "succeeded") return;
+
+    // Kick first step visually even before server stages arrive
+    if ((!job || job.stages.length === 0) && jobId) {
+      setActiveRunningId("__queued__");
+    }
+
     const t = setInterval(() => {
       setRunningLevel((prev) => {
         const idx = RUNNING_LEVELS.indexOf(prev);
@@ -149,19 +185,19 @@ export function SpaceWizard() {
         if (idx >= RUNNING_LEVELS.length - 1) return RUNNING_LEVELS[RUNNING_LEVELS.length - 1];
         return RUNNING_LEVELS[idx + 1];
       });
-    }, 4500);
+    }, 3500);
     return () => clearInterval(t);
-  }, [job, activeRunningId]);
+  }, [job, jobId, activeRunningId]);
 
   const stepPercents = useMemo(() => {
     return INSTALL_STEPS.map((stepDef, index) => {
-      const status = resolveStageStatus(stepDef.id, index, job);
+      const status = resolveStageStatus(stepDef.id, index, job, jobId);
       if (status === "succeeded" || status === "skipped") return 100;
-      if (status === "failed") return runningLevel;
+      if (status === "failed") return Math.max(runningLevel, 20);
       if (status === "running") return runningLevel;
       return 0;
     });
-  }, [job, runningLevel]);
+  }, [job, jobId, runningLevel]);
 
   const overallPercent = useMemo(() => {
     if (job?.status === "succeeded") return 100;
@@ -488,7 +524,7 @@ export function SpaceWizard() {
                     )}
                     <ol className="space-y-4">
                       {INSTALL_STEPS.map((stepDef, index) => {
-                        const status = resolveStageStatus(stepDef.id, index, job);
+                        const status = resolveStageStatus(stepDef.id, index, job, jobId);
                         const pct = stepPercents[index] ?? 0;
                         return (
                           <li key={stepDef.id} className="flex gap-3 text-sm">
