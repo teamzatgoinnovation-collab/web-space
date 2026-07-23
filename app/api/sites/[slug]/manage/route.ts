@@ -5,6 +5,7 @@ import {
   hostnameFromSlug,
   manageClearCache,
   manageInstallApp,
+  manageMigrate,
   manageSetPlan,
   manageUninstallApp,
 } from "@/lib/site-manage";
@@ -29,6 +30,9 @@ const Body = z.discriminatedUnion("action", [
   }),
   z.object({
     action: z.literal("clear-cache"),
+  }),
+  z.object({
+    action: z.literal("migrate"),
   }),
 ]);
 
@@ -70,6 +74,11 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     }
     if (body.action === "set-plan") {
       const result = manageSetPlan(hostname, body.plan);
+      if (!result.ok) return NextResponse.json(result, { status: 400 });
+      return NextResponse.json(result);
+    }
+    if (body.action === "migrate") {
+      const result = await manageMigrate(hostname);
       if (!result.ok) return NextResponse.json(result, { status: 400 });
       return NextResponse.json(result);
     }

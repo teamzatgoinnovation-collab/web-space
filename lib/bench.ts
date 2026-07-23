@@ -358,6 +358,23 @@ export async function clearCache(env: BenchEnv, site: string): Promise<RunResult
   });
 }
 
+export async function migrateSite(env: BenchEnv, site: string): Promise<RunResult> {
+  return runOnBench(env, ["bench", "--site", assertSiteName(site), "migrate"], {
+    timeoutMs: 60 * 60_000,
+  });
+}
+
+/** After install-app / schema changes: migrate then clear-cache. */
+export async function refreshSiteAfterChange(
+  env: BenchEnv,
+  site: string,
+): Promise<RunResult> {
+  const host = assertSiteName(site);
+  const mig = await migrateSite(env, host);
+  if (!mig.ok) return mig;
+  return clearCache(env, host);
+}
+
 export async function listAppsOnSite(env: BenchEnv, site: string): Promise<RunResult> {
   return runOnBench(env, ["bench", "--site", assertSiteName(site), "list-apps"]);
 }

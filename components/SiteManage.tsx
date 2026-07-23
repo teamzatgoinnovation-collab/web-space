@@ -126,7 +126,7 @@ export function SiteManage({ slug }: Props) {
           {site.hostname}
         </h1>
         <p className="mt-2 text-sm text-[var(--space-ink)]/65">
-          Install apps, change plan, and refresh the site.
+          Install or remove apps with bench, change plan, clear cache, or update the site schema.
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
           <a
@@ -141,11 +141,25 @@ export function SiteManage({ slug }: Props) {
             type="button"
             disabled={!!busy || locked}
             onClick={() =>
-              void runAction("clear-cache", { action: "clear-cache" }, "Site refreshed.")
+              void runAction("clear-cache", { action: "clear-cache" }, "Site cache cleared.")
             }
             className="rounded-xl border border-[var(--space-ink)]/15 bg-white/70 px-4 py-2 text-sm font-medium hover:bg-white disabled:opacity-50"
           >
-            {busy === "clear-cache" ? "Refreshing…" : "Refresh site"}
+            {busy === "clear-cache" ? "Clearing…" : "Clear cache"}
+          </button>
+          <button
+            type="button"
+            disabled={!!busy || locked}
+            onClick={() =>
+              void runAction(
+                "migrate",
+                { action: "migrate" },
+                "Site updated (migrate + clear cache).",
+              )
+            }
+            className="rounded-xl border border-[var(--space-ink)]/15 bg-white/70 px-4 py-2 text-sm font-medium hover:bg-white disabled:opacity-50"
+          >
+            {busy === "migrate" ? "Updating…" : "Update site"}
           </button>
         </div>
       </header>

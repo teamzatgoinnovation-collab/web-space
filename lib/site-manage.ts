@@ -13,6 +13,7 @@ import {
   listBenchApps,
   listInstalledAppsOnSite,
   listSites,
+  refreshSiteAfterChange,
   uninstallApp,
 } from "./bench";
 import {
@@ -142,9 +143,14 @@ export async function manageInstallApp(
   const r = await installApp(env, host, app);
   if (!r.ok) {
     if (isDevConsoleEnabled()) sitesLog(`manage: install FAILED ${r.stderr.slice(0, 200)}`);
-    return { ok: false, error: "Could not install that app. Try again later." };
+    return { ok: false, error: benchUserError(r.stderr, "Could not install that app.") };
   }
-  await clearCache(env, host);
+  // install-app → migrate → clear-cache (bench ops)
+  if (isDevConsoleEnabled()) sitesLog(`manage: migrate + clear-cache ${host}`);
+  const refresh = await refreshSiteAfterChange(env, host);
+  if (!refresh.ok && isDevConsoleEnabled()) {
+    sitesLog(`manage: refresh after install WARN ${refresh.stderr.slice(0, 200)}`);
+  }
   const apps = await listInstalledAppsOnSite(env, host);
   const order = getOrderByHostname(host);
   if (order) {
@@ -170,9 +176,14 @@ export async function manageUninstallApp(
   const r = await uninstallApp(env, host, app);
   if (!r.ok) {
     if (isDevConsoleEnabled()) sitesLog(`manage: uninstall FAILED ${r.stderr.slice(0, 200)}`);
-    return { ok: false, error: "Could not remove that app. Try again later." };
+    return { ok: false, error: benchUserError(r.stderr, "Could not remove that app.") };
   }
-  await clearCache(env, host);
+  // uninstall-app → clear-cache (and migrate if schema leftovers)
+  if (isDevConsoleEnabled()) sitesLog(`manage: migrate + clear-cache ${host}`);
+  const refresh = await refreshSiteAfterChange(env, host);
+  if (!refresh.ok && isDevConsoleEnabled()) {
+    sitesLog(`manage: refresh after uninstall WARN ${refresh.stderr.slice(0, 200)}`);
+  }
   const apps = await listInstalledAppsOnSite(env, host);
   const order = getOrderByHostname(host);
   if (order) {
@@ -192,9 +203,34 @@ export async function manageClearCache(
   if (isDevConsoleEnabled()) sitesLog(`manage: clear-cache ${host}`);
   const r = await clearCache(env, host);
   if (!r.ok) {
-    return { ok: false, error: "Could not refresh the site. Try again later." };
+    return { ok: false, error: benchUserError(r.stderr, "Could not refresh the site.") };
   }
   return { ok: true };
+}
+
+/** Full bench refresh: migrate + clear-cache. */
+export async function manageMigrate(
+  hostname: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const env = benchEnv();
+  const host = assertSiteName(hostname);
+  if (isDevConsoleEnabled()) sitesLog(`manage: migrate ${host}`);
+  const r = await refreshSiteAfterChange(env, host);
+  if (!r.ok) {
+    return { ok: false, error: benchUserError(r.stderr, "Could not update the site.") };
+  }
+  return { ok: true };
+}
+
+function benchUserError(stderr: string, fallback: string): string {
+  const s = (stderr || "").toLowerCase();
+  if (/timed out|timeout|connection timed out|unreachable|no route/.test(s)) {
+    return "Could not reach the server. Try again in a moment.";
+  }
+  if (/permission|not permitted|access denied/.test(s)) {
+    return "That action is not allowed on this site.";
+  }
+  return `${fallback} Try again later.`;
 }
 
 export function manageSetPlan(
