@@ -102,13 +102,19 @@ const DEFAULT_PLANS: SpacePlan[] = [
 ];
 
 const APP_TITLE_OVERRIDES: Record<string, string> = {
-  frappe: "Frappe Framework",
+  frappe: "Framework (required)",
   erpnext: "ERPNext",
-  hrms: "HRMS",
+  hrms: "HR",
   zatgo_core: "ZatGo Core",
-  zatgo_space: "ZatGo Space",
   chat_ai: "Chat AI",
+  crm: "CRM",
+  helpdesk: "Helpdesk",
+  telephony: "Telephony",
+  tracker: "Tracker",
 };
+
+/** Platform / ops apps — not offered in the customer wizard. */
+const CATALOG_HIDDEN_APPS = new Set(["zatgo_space"]);
 
 function titleForApp(pkg: string): string {
   return (
@@ -420,12 +426,12 @@ export async function listCatalogApps(): Promise<
   }
 
   const priority: Record<string, number> = { frappe: 0, erpnext: 1 };
-  const sorted = [...new Set(packages)].sort(
-    (a, b) => (priority[a] ?? 50) - (priority[b] ?? 50) || a.localeCompare(b),
-  );
+  const sorted = [...new Set(packages)]
+    .filter((p) => !CATALOG_HIDDEN_APPS.has(p))
+    .sort((a, b) => (priority[a] ?? 50) - (priority[b] ?? 50) || a.localeCompare(b));
 
   if (sorted.length === 0) {
-    return [{ package: "frappe", title: "Frappe Framework", required: true }];
+    return [{ package: "frappe", title: "Framework (required)", required: true }];
   }
 
   return sorted.map((pkg) => ({

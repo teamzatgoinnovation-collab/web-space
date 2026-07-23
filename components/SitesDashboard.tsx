@@ -5,81 +5,95 @@ import Link from "next/link";
 import { formatMb, pct } from "@/lib/format";
 import type { MeasuredBench, PoolSummary, SiteUsageRow } from "@/lib/sites-usage";
 
-function ProgressBar({
-  value,
-  tone = "accent",
-}: {
-  value: number;
-  tone?: "accent" | "warn" | "ink";
-}) {
-  const color =
-    tone === "warn"
-      ? "bg-amber-600"
-      : tone === "ink"
-        ? "bg-[var(--space-ink)]"
-        : "bg-[var(--space-accent)]";
+const APP_LABELS: Record<string, string> = {
+  frappe: "Framework",
+  erpnext: "ERPNext",
+  hrms: "HR",
+  crm: "CRM",
+  helpdesk: "Helpdesk",
+  telephony: "Telephony",
+  chat_ai: "Chat AI",
+  tracker: "Tracker",
+  zatgo_core: "ZatGo Core",
+  zatgo_space: "ZatGo Space",
+};
+
+/** Hide internal/platform packages from the customer view. */
+const HIDDEN_APPS = new Set(["frappe", "zatgo_space"]);
+
+function appLabel(pkg: string): string {
+  return APP_LABELS[pkg] || pkg.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function visibleApps(apps: string[]): string[] {
+  return apps.filter((a) => !HIDDEN_APPS.has(a)).map(appLabel);
+}
+
+function ProgressBar({ value }: { value: number }) {
   return (
     <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--space-ink)]/10">
       <div
-        className={`h-full rounded-full transition-all duration-500 ${color}`}
+        className="h-full rounded-full bg-[var(--space-accent)] transition-all duration-500"
         style={{ width: `${Math.min(100, Math.max(0, value))}%` }}
       />
     </div>
   );
 }
 
-function MeasuredCard({
+function SummaryCard({
   title,
-  used,
-  limit,
-  unitHint,
+  value,
+  detail,
 }: {
   title: string;
-  used: number;
-  limit: number;
-  unitHint: string;
+  value: string;
+  detail: string;
 }) {
-  const usedPct = limit > 0 ? pct(used, limit) : used > 0 ? 35 : 0;
   return (
     <div className="rounded-2xl border border-[var(--space-ink)]/10 bg-white/70 p-5 backdrop-blur">
-      <div className="flex items-baseline justify-between gap-3">
-        <h2 className="text-sm font-semibold tracking-wide text-[var(--space-ink)]/70">{title}</h2>
-        <span className="text-xs text-[var(--space-ink)]/50">{unitHint}</span>
-      </div>
-      <p className="mt-2 text-2xl font-semibold tabular-nums">
-        {formatMb(used)}
-        {limit > 0 ? (
-          <span className="text-base font-normal text-[var(--space-ink)]/40">
-            {" "}
-            / {formatMb(limit)}
-          </span>
-        ) : null}
-      </p>
-      <p className="mt-1 text-xs text-[var(--space-ink)]/55">Live from Docker</p>
-      <div className="mt-3">
-        <ProgressBar value={usedPct} />
-      </div>
+      <h2 className="text-sm font-semibold tracking-wide text-[var(--space-ink)]/70">{title}</h2>
+      <p className="mt-2 text-2xl font-semibold tabular-nums">{value}</p>
+      <p className="mt-1 text-xs text-[var(--space-ink)]/55">{detail}</p>
     </div>
   );
 }
 
-function kindBadge(site: SiteUsageRow): { label: string; className: string } {
+function siteBadge(site: SiteUsageRow): { label: string; className: string } {
   if (site.kind === "erp") {
     return {
-      label: "Bench / ERP",
+      label: "Main ERP",
       className: "bg-[var(--space-ink)]/10 text-[var(--space-ink)]/70",
     };
   }
-  if (site.kind === "space" && site.inPool) {
+  if (site.kind === "space" && site.planTitle) {
     return {
-      label: site.planTitle || site.plan || "Space",
+      label: site.planTitle,
       className: "bg-[var(--space-accent-soft)] text-[var(--space-accent)]",
     };
   }
+  if (!site.onDocker || site.status === "Provisioning") {
+    return {
+      label: "Setting up",
+      className: "bg-amber-100 text-amber-900",
+    };
+  }
   return {
-    label: "On Docker",
-    className: "bg-[var(--space-mist)] text-[var(--space-ink)]/70",
+    label: "Ready",
+    className: "bg-[var(--space-accent-soft)] text-[var(--space-accent)]",
   };
+}
+
+function siteHelpLine(site: SiteUsageRow): string {
+  if (!site.onDocker || site.status === "Provisioning") {
+    return "Your site is still being prepared. This can take several minutes.";
+  }
+  if (site.kind === "erp") {
+    return "Your main company ERP site.";
+  }
+  if (site.inPool && site.planTitle) {
+    return `${site.planTitle} plan · Open Desk to sign in as Administrator.`;
+  }
+  return "Open Desk to sign in as Administrator.";
 }
 
 export function SitesDashboard() {
@@ -89,7 +103,6 @@ export function SitesDashboard() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
 
   const load = useCallback(async (opts?: { soft?: boolean }) => {
     if (opts?.soft) setRefreshing(true);
@@ -99,18 +112,16 @@ export function SitesDashboard() {
       const res = await fetch("/api/sites?refresh=1", { cache: "no-store" });
       const data = await res.json();
       if (!data.ok && (!data.sites || data.sites.length === 0)) {
-        throw new Error(data.error || "Failed to load sites");
+        throw new Error(data.error || "Could not load your sites. Try again.");
       }
       setPool(data.pool);
       setMeasured(data.measured || null);
       setSites(data.sites || []);
-      const firstTs = (data.sites || []).find(
-        (s: SiteUsageRow) => s.usageUpdatedAt,
-      )?.usageUpdatedAt;
-      setUpdatedAt(firstTs || new Date().toISOString());
-      if (data.error) setError(data.error);
+      if (data.error) {
+        setError("Some site details could not be refreshed. Try again in a moment.");
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(err instanceof Error ? err.message : "Could not load your sites.");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -121,16 +132,20 @@ export function SitesDashboard() {
     void load();
   }, [load]);
 
+  const readyCount = sites.filter((s) => s.onDocker).length;
+  const memPct =
+    measured && measured.ramLimitMb > 0 ? pct(measured.ramUsedMb, measured.ramLimitMb) : 0;
+
   return (
     <div className="mx-auto flex min-h-screen max-w-4xl flex-col px-4 py-10 sm:px-6">
       <header className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-sm font-medium tracking-wide text-[var(--space-accent)]">ZatGo</p>
           <h1 className="mt-1 text-4xl font-semibold tracking-tight text-[var(--space-ink)] sm:text-5xl">
-            Sites
+            Your sites
           </h1>
           <p className="mt-3 max-w-xl text-base text-[var(--space-ink)]/70">
-            Live sites, disk, and installed apps from the Docker bench — refreshed on load.
+            See each site’s address, storage, and apps. Open a site to sign in to Desk.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -146,7 +161,7 @@ export function SitesDashboard() {
             onClick={() => void load({ soft: true })}
             className="rounded-xl bg-[var(--space-accent)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
           >
-            {refreshing ? "Refreshing…" : "Refresh"}
+            {refreshing ? "Updating…" : "Refresh"}
           </button>
         </div>
       </header>
@@ -157,46 +172,53 @@ export function SitesDashboard() {
         </div>
       )}
 
-      {loading && !measured && !pool ? (
-        <p className="text-sm text-[var(--space-ink)]/60">Loading live Docker data…</p>
+      {loading && !measured ? (
+        <p className="text-sm text-[var(--space-ink)]/60">Loading your sites…</p>
       ) : (
         <>
-          {measured && (
-            <div className="grid gap-4 sm:grid-cols-2">
-              <MeasuredCard
-                title="Container RAM"
-                used={measured.ramUsedMb}
-                limit={measured.ramLimitMb}
-                unitHint="docker stats"
-              />
-              <MeasuredCard
-                title="Sites disk"
-                used={measured.diskUsedMb}
-                limit={0}
-                unitHint={`${measured.siteCount} site${measured.siteCount === 1 ? "" : "s"} · du`}
-              />
+          <div className="grid gap-4 sm:grid-cols-3">
+            <SummaryCard
+              title="Sites"
+              value={String(readyCount)}
+              detail={readyCount === 1 ? "Active site" : "Active sites"}
+            />
+            <div className="rounded-2xl border border-[var(--space-ink)]/10 bg-white/70 p-5 backdrop-blur">
+              <h2 className="text-sm font-semibold tracking-wide text-[var(--space-ink)]/70">
+                Memory
+              </h2>
+              <p className="mt-2 text-2xl font-semibold tabular-nums">
+                {measured ? formatMb(measured.ramUsedMb) : "—"}
+                {measured && measured.ramLimitMb > 0 ? (
+                  <span className="text-base font-normal text-[var(--space-ink)]/40">
+                    {" "}
+                    / {formatMb(measured.ramLimitMb)}
+                  </span>
+                ) : null}
+              </p>
+              <p className="mt-1 text-xs text-[var(--space-ink)]/55">Shared across all sites</p>
+              <div className="mt-3">
+                <ProgressBar value={memPct} />
+              </div>
             </div>
-          )}
+            <SummaryCard
+              title="Storage"
+              value={measured ? formatMb(measured.diskUsedMb) : "—"}
+              detail="Total used by your sites"
+            />
+          </div>
 
           {pool && pool.siteCount > 0 && (
-            <p className="mt-3 text-xs text-[var(--space-ink)]/45">
-              Soft Space pool: {formatMb(pool.allocatedRamMb)} / {formatMb(pool.ramPoolMb)} RAM
-              allocated across {pool.siteCount} order
-              {pool.siteCount === 1 ? "" : "s"}
-            </p>
-          )}
-
-          {updatedAt && (
-            <p className="mt-2 text-xs text-[var(--space-ink)]/40">
-              Updated {new Date(updatedAt).toLocaleString()}
+            <p className="mt-4 text-sm text-[var(--space-ink)]/60">
+              Plan capacity left: {formatMb(pool.freeRamMb)} memory · {formatMb(pool.freeDiskMb)}{" "}
+              storage
             </p>
           )}
 
           <section className="mt-10">
-            <h2 className="text-lg font-semibold">Docker bench sites</h2>
+            <h2 className="text-lg font-semibold">All sites</h2>
             {sites.length === 0 ? (
               <div className="mt-4 rounded-2xl border border-dashed border-[var(--space-ink)]/20 bg-white/40 px-6 py-10 text-center">
-                <p className="text-sm text-[var(--space-ink)]/65">No sites found on the Docker bench.</p>
+                <p className="text-sm text-[var(--space-ink)]/65">You don’t have any sites yet.</p>
                 <Link
                   href="/"
                   className="mt-4 inline-block text-sm font-medium text-[var(--space-accent)] underline-offset-2 hover:underline"
@@ -207,77 +229,74 @@ export function SitesDashboard() {
             ) : (
               <ul className="mt-4 space-y-3">
                 {sites.map((site) => {
-                  const badge = kindBadge(site);
-                  const hasLimits = site.inPool && site.ramLimitMb > 0;
+                  const badge = siteBadge(site);
+                  const apps = visibleApps(site.apps || []);
+                  const hasPlanLimits = site.inPool && site.diskLimitMb > 0;
                   return (
                     <li
                       key={site.name}
                       className="rounded-2xl border border-[var(--space-ink)]/10 bg-white/70 p-5 backdrop-blur"
                     >
                       <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
+                        <div className="min-w-0">
                           <a
                             href={site.deskUrl || `https://${site.hostname}`}
                             target="_blank"
                             rel="noreferrer"
-                            className="text-base font-semibold text-[var(--space-ink)] hover:text-[var(--space-accent)]"
+                            className="break-all text-base font-semibold text-[var(--space-ink)] hover:text-[var(--space-accent)]"
                           >
                             {site.hostname}
                           </a>
-                          <p className="mt-0.5 text-xs text-[var(--space-ink)]/55">
-                            {site.onDocker ? "On Docker" : "Provisioning"} · {site.status}
-                            {hasLimits
-                              ? ` · plan ${formatMb(site.ramLimitMb)} RAM / ${formatMb(site.diskLimitMb)} disk`
-                              : ""}
+                          <p className="mt-1 text-sm text-[var(--space-ink)]/60">
+                            {siteHelpLine(site)}
                           </p>
                         </div>
                         <span
-                          className={`rounded-full px-3 py-1 text-xs font-medium ${badge.className}`}
+                          className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium ${badge.className}`}
                         >
                           {badge.label}
                         </span>
                       </div>
 
-                      {site.apps.length > 0 && (
-                        <div className="mt-3 flex flex-wrap gap-1.5">
-                          {site.apps.map((app) => (
-                            <span
-                              key={app}
-                              className="rounded-md bg-[var(--space-ink)]/5 px-2 py-0.5 text-xs text-[var(--space-ink)]/75"
-                            >
-                              {app}
-                            </span>
-                          ))}
+                      {apps.length > 0 && (
+                        <div className="mt-3">
+                          <p className="mb-1.5 text-xs font-medium text-[var(--space-ink)]/50">
+                            Apps
+                          </p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {apps.map((label) => (
+                              <span
+                                key={label}
+                                className="rounded-md bg-[var(--space-ink)]/5 px-2 py-0.5 text-xs text-[var(--space-ink)]/80"
+                              >
+                                {label}
+                              </span>
+                            ))}
+                          </div>
                         </div>
                       )}
 
-                      <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-                        <div className="rounded-xl bg-[var(--space-ink)]/[0.03] px-3 py-2">
-                          <div className="text-xs text-[var(--space-ink)]/50">Disk (live du)</div>
-                          <div className="mt-0.5 font-medium tabular-nums">
+                      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                        <p className="text-sm text-[var(--space-ink)]/70">
+                          Storage used:{" "}
+                          <span className="font-medium tabular-nums text-[var(--space-ink)]">
                             {formatMb(site.diskUsedMb)}
-                            {hasLimits ? (
-                              <span className="font-normal text-[var(--space-ink)]/45">
-                                {" "}
-                                / {formatMb(site.diskLimitMb)} plan
-                              </span>
-                            ) : null}
-                          </div>
-                        </div>
-                        <div className="rounded-xl bg-[var(--space-ink)]/[0.03] px-3 py-2">
-                          <div className="text-xs text-[var(--space-ink)]/50">
-                            RAM share (soft · shared container)
-                          </div>
-                          <div className="mt-0.5 font-medium tabular-nums">
-                            {formatMb(site.ramUsedMb)}
-                            {hasLimits ? (
-                              <span className="font-normal text-[var(--space-ink)]/45">
-                                {" "}
-                                / {formatMb(site.ramLimitMb)} plan
-                              </span>
-                            ) : null}
-                          </div>
-                        </div>
+                          </span>
+                          {hasPlanLimits ? (
+                            <span className="text-[var(--space-ink)]/45">
+                              {" "}
+                              of {formatMb(site.diskLimitMb)} included
+                            </span>
+                          ) : null}
+                        </p>
+                        <a
+                          href={site.deskUrl || `https://${site.hostname}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="rounded-lg bg-[var(--space-accent)] px-3 py-1.5 text-xs font-medium text-white"
+                        >
+                          Open Desk
+                        </a>
                       </div>
                     </li>
                   );

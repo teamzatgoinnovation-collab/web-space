@@ -350,7 +350,7 @@ export function SpaceWizard() {
               href="/sites"
               className="rounded-lg border border-[var(--space-ink)]/15 bg-white/60 px-3 py-1.5 text-xs font-medium text-[var(--space-ink)]/70 hover:bg-white"
             >
-              Sites dashboard
+              Your sites
             </Link>
             {showDevConsole && (
               <span className="rounded-lg border border-[var(--space-ink)]/15 bg-white/60 px-3 py-1.5 text-xs font-medium text-[var(--space-ink)]/50">
@@ -360,8 +360,8 @@ export function SpaceWizard() {
           </div>
         </div>
         <p className="mt-3 max-w-xl text-base text-[var(--space-ink)]/70">
-          Create an ERPNext site on the shared Docker bench as a zatgo.online subdomain — pick
-          apps from the bench, choose a plan, and go.
+          Create your ERPNext site on a zatgo.online address — choose apps, pick a plan, and open
+          Desk when it’s ready.
         </p>
       </header>
 
@@ -428,8 +428,7 @@ export function SpaceWizard() {
               <section>
                 <h2 className="text-xl font-semibold">Apps & Administrator</h2>
                 <p className="mt-1 text-sm text-[var(--space-ink)]/60">
-                  Apps listed from the Docker bench (<code className="text-xs">get-app</code> /{" "}
-                  <code className="text-xs">apps/</code>). Username is fixed as{" "}
+                  Choose which apps to install. Sign-in user is always{" "}
                   <strong>Administrator</strong>.
                 </p>
                 <div className="mt-6 grid gap-2 sm:grid-cols-2">
@@ -480,18 +479,13 @@ export function SpaceWizard() {
               <section>
                 <h2 className="text-xl font-semibold">Billing plan</h2>
                 <p className="mt-1 text-sm text-[var(--space-ink)]/60">
-                  Soft quotas on the shared Docker bench — mock billing, no charge
-                  {catalog?.pool
-                    ? ` (${formatMb(catalog.pool.ramPoolMb)} RAM pool).`
-                    : " (10 GB RAM pool)."}
+                  Choose how much memory and storage your site includes. Billing is mock for now —
+                  no charge.
                 </p>
                 {catalog?.pool && (
                   <p className="mt-2 text-xs text-[var(--space-ink)]/50">
-                    Pool free: {formatMb(catalog.pool.freeRamMb)} RAM ·{" "}
-                    {formatMb(catalog.pool.freeDiskMb)} disk
-                    {catalog.pool.siteCount
-                      ? ` · ${catalog.pool.siteCount} site${catalog.pool.siteCount === 1 ? "" : "s"} allocated`
-                      : ""}
+                    Available: {formatMb(catalog.pool.freeRamMb)} memory ·{" "}
+                    {formatMb(catalog.pool.freeDiskMb)} storage
                   </p>
                 )}
                 <div className="mt-6 grid gap-3">
@@ -526,7 +520,7 @@ export function SpaceWizard() {
                         )}
                         {!fits && (
                           <p className="mt-1 text-xs text-amber-800">
-                            Does not fit remaining pool capacity
+                            Not enough capacity left — pick a smaller plan or free a site
                           </p>
                         )}
                         <ul className="mt-2 list-inside list-disc text-xs opacity-70">
