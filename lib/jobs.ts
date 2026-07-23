@@ -188,3 +188,29 @@ export function setJobResult(id: string, result: Job["result"]) {
   job.result = result;
   touch(job);
 }
+
+export function listJobs(limit = 40): Job[] {
+  ensureDir();
+  const fromDisk: Job[] = [];
+  try {
+    const files = fs.readdirSync(jobsDir()).filter((f) => f.endsWith(".json"));
+    for (const f of files) {
+      try {
+        const raw = fs.readFileSync(path.join(jobsDir(), f), "utf8");
+        const job = JSON.parse(raw) as Job;
+        store().memory.set(job.id, job);
+        fromDisk.push(job);
+      } catch {
+        // skip bad file
+      }
+    }
+  } catch {
+    // ignore
+  }
+  const all = new Map<string, Job>();
+  for (const j of store().memory.values()) all.set(j.id, j);
+  for (const j of fromDisk) all.set(j.id, j);
+  return [...all.values()]
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .slice(0, limit);
+}

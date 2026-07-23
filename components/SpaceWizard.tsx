@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { DevActivityConsole } from "@/components/DevActivityConsole";
+import { isDevConsoleEnabled } from "@/lib/dev-console";
 
 type Catalog = {
   domainSuffix: string;
@@ -127,6 +129,7 @@ export function SpaceWizard() {
   const [runningLevel, setRunningLevel] = useState<(typeof RUNNING_LEVELS)[number]>(20);
   const [activeRunningId, setActiveRunningId] = useState<string | null>(null);
   const runningStartedAt = useRef<number>(Date.now());
+  const showDevConsole = isDevConsoleEnabled();
 
   useEffect(() => {
     void fetch("/api/catalog")
@@ -317,10 +320,22 @@ export function SpaceWizard() {
   return (
     <div className="mx-auto flex min-h-screen max-w-3xl flex-col px-4 py-10 sm:px-6">
       <header className="mb-10">
-        <p className="text-sm font-medium tracking-wide text-[var(--space-accent)]">ZatGo</p>
-        <h1 className="mt-1 text-4xl font-semibold tracking-tight text-[var(--space-ink)] sm:text-5xl">
-          Space
-        </h1>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium tracking-wide text-[var(--space-accent)]">ZatGo</p>
+            <h1 className="mt-1 text-4xl font-semibold tracking-tight text-[var(--space-ink)] sm:text-5xl">
+              Space
+            </h1>
+          </div>
+          {showDevConsole && (
+            <a
+              href="/dev"
+              className="shrink-0 rounded-lg border border-[var(--space-ink)]/15 bg-white/60 px-3 py-1.5 text-xs font-medium text-[var(--space-ink)]/70 hover:bg-white"
+            >
+              Dev console
+            </a>
+          )}
+        </div>
         <p className="mt-3 max-w-xl text-base text-[var(--space-ink)]/70">
           Create your ERPNext site on a zatgo.online subdomain — pick apps, choose a plan, and go.
         </p>
@@ -620,6 +635,7 @@ export function SpaceWizard() {
                         </button>
                       </div>
                     )}
+                    {showDevConsole && <DevActivityConsole jobId={jobId} />}
                   </div>
                 )}
               </section>
