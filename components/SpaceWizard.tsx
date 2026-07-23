@@ -4,11 +4,29 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { DevActivityConsole } from "@/components/DevActivityConsole";
 import { isDevConsoleEnabled } from "@/lib/dev-console";
+import { formatMb } from "@/lib/format";
+import Link from "next/link";
 
 type Catalog = {
   domainSuffix: string;
   apps: { package: string; title: string; required?: boolean }[];
-  plans: { code: string; title: string; mock_price: string; features: string[] }[];
+  plans: {
+    code: string;
+    title: string;
+    mock_price: string;
+    features: string[];
+    ramLimitMb?: number;
+    diskLimitMb?: number;
+  }[];
+  pool?: {
+    ramPoolMb: number;
+    diskPoolMb: number;
+    allocatedRamMb: number;
+    allocatedDiskMb: number;
+    freeRamMb: number;
+    freeDiskMb: number;
+    siteCount: number;
+  };
 };
 
 type JobView = {
@@ -327,11 +345,19 @@ export function SpaceWizard() {
               Space
             </h1>
           </div>
-          {showDevConsole && (
-            <span className="shrink-0 rounded-lg border border-[var(--space-ink)]/15 bg-white/60 px-3 py-1.5 text-xs font-medium text-[var(--space-ink)]/50">
-              Dev logs: bottom-right
-            </span>
-          )}
+          <div className="flex shrink-0 flex-col items-end gap-2">
+            <Link
+              href="/sites"
+              className="rounded-lg border border-[var(--space-ink)]/15 bg-white/60 px-3 py-1.5 text-xs font-medium text-[var(--space-ink)]/70 hover:bg-white"
+            >
+              Sites dashboard
+            </Link>
+            {showDevConsole && (
+              <span className="rounded-lg border border-[var(--space-ink)]/15 bg-white/60 px-3 py-1.5 text-xs font-medium text-[var(--space-ink)]/50">
+                Dev logs: bottom-right
+              </span>
+            )}
+          </div>
         </div>
         <p className="mt-3 max-w-xl text-base text-[var(--space-ink)]/70">
           Create your ERPNext site on a zatgo.online subdomain — pick apps, choose a plan, and go.
@@ -451,31 +477,63 @@ export function SpaceWizard() {
               <section>
                 <h2 className="text-xl font-semibold">Billing plan</h2>
                 <p className="mt-1 text-sm text-[var(--space-ink)]/60">
-                  Mock billing for MVP — no charge. Stripe / PayPal coming soon.
+                  Mock billing for MVP — no charge. Soft quotas from a shared server pool
+                  {catalog?.pool
+                    ? ` (${formatMb(catalog.pool.ramPoolMb)} RAM).`
+                    : " (10 GB RAM)."}
                 </p>
+                {catalog?.pool && (
+                  <p className="mt-2 text-xs text-[var(--space-ink)]/50">
+                    Pool free: {formatMb(catalog.pool.freeRamMb)} RAM ·{" "}
+                    {formatMb(catalog.pool.freeDiskMb)} disk
+                    {catalog.pool.siteCount
+                      ? ` · ${catalog.pool.siteCount} site${catalog.pool.siteCount === 1 ? "" : "s"} allocated`
+                      : ""}
+                  </p>
+                )}
                 <div className="mt-6 grid gap-3">
-                  {(catalog?.plans || []).map((p) => (
-                    <button
-                      key={p.code}
-                      type="button"
-                      onClick={() => setPlan(p.code)}
-                      className={`rounded-xl border px-4 py-4 text-left transition ${
-                        plan === p.code
-                          ? "border-[var(--space-accent)] bg-[var(--space-accent-soft)]"
-                          : "border-[var(--space-ink)]/10 bg-white"
-                      }`}
-                    >
-                      <div className="flex items-baseline justify-between gap-3">
-                        <span className="font-semibold">{p.title}</span>
-                        <span className="text-sm opacity-70">{p.mock_price}</span>
-                      </div>
-                      <ul className="mt-2 list-inside list-disc text-xs opacity-70">
-                        {p.features.map((f) => (
-                          <li key={f}>{f}</li>
-                        ))}
-                      </ul>
-                    </button>
-                  ))}
+                  {(catalog?.plans || []).map((p) => {
+                    const ram = p.ramLimitMb ?? 0;
+                    const disk = p.diskLimitMb ?? 0;
+                    const fitsRam =
+                      !catalog?.pool || catalog.pool.freeRamMb >= ram;
+                    const fitsDisk =
+                      !catalog?.pool || catalog.pool.freeDiskMb >= disk;
+                    const fits = fitsRam && fitsDisk;
+                    return (
+                      <button
+                        key={p.code}
+                        type="button"
+                        disabled={!fits}
+                        onClick={() => setPlan(p.code)}
+                        className={`rounded-xl border px-4 py-4 text-left transition ${
+                          plan === p.code
+                            ? "border-[var(--space-accent)] bg-[var(--space-accent-soft)]"
+                            : "border-[var(--space-ink)]/10 bg-white"
+                        } ${!fits ? "cursor-not-allowed opacity-50" : ""}`}
+                      >
+                        <div className="flex items-baseline justify-between gap-3">
+                          <span className="font-semibold">{p.title}</span>
+                          <span className="text-sm opacity-70">{p.mock_price}</span>
+                        </div>
+                        {(ram > 0 || disk > 0) && (
+                          <p className="mt-1.5 text-sm font-medium text-[var(--space-accent)]">
+                            {formatMb(ram)} RAM · {formatMb(disk)} disk
+                          </p>
+                        )}
+                        {!fits && (
+                          <p className="mt-1 text-xs text-amber-800">
+                            Does not fit remaining pool capacity
+                          </p>
+                        )}
+                        <ul className="mt-2 list-inside list-disc text-xs opacity-70">
+                          {p.features.map((f) => (
+                            <li key={f}>{f}</li>
+                          ))}
+                        </ul>
+                      </button>
+                    );
+                  })}
                 </div>
                 <div className="mt-6">
                   <p className="text-sm font-medium">Payment method</p>

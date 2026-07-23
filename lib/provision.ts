@@ -34,19 +34,25 @@ const MOCK_PLANS = [
     code: "basic",
     title: "Basic",
     mock_price: "$0 / mo (mock)",
-    features: ["1 site", "ERPNext core", "Community support"],
+    features: ["1 site", "ERPNext core", "1 GB RAM", "5 GB disk", "Community support"],
+    ramLimitMb: 1024,
+    diskLimitMb: 5120,
   },
   {
     code: "pro",
     title: "Pro",
     mock_price: "$49 / mo (mock)",
-    features: ["1 site", "ERPNext + HRMS", "Priority email support"],
+    features: ["1 site", "ERPNext + HRMS", "3 GB RAM", "15 GB disk", "Priority email support"],
+    ramLimitMb: 3072,
+    diskLimitMb: 15360,
   },
   {
     code: "enterprise",
     title: "Enterprise",
     mock_price: "$199 / mo (mock)",
-    features: ["Multi-site ready", "Custom apps", "Dedicated onboarding"],
+    features: ["Multi-site ready", "Custom apps", "5 GB RAM", "30 GB disk", "Dedicated onboarding"],
+    ramLimitMb: 5120,
+    diskLimitMb: 30720,
   },
 ];
 
@@ -56,12 +62,23 @@ const DEFAULT_APPS = [
   { package: "hrms", title: "HRMS", required: false },
 ];
 
+const DEFAULT_POOL = {
+  ramPoolMb: 10240,
+  diskPoolMb: 102400,
+  allocatedRamMb: 0,
+  allocatedDiskMb: 0,
+  freeRamMb: 10240,
+  freeDiskMb: 102400,
+  siteCount: 0,
+};
+
 export function getLocalCatalog() {
   return {
     ok: true,
     domainSuffix: domainSuffix(),
     apps: DEFAULT_APPS,
     plans: MOCK_PLANS,
+    pool: DEFAULT_POOL,
   };
 }
 
@@ -106,10 +123,26 @@ export async function createControlOrder(payload: ProvisionPayload): Promise<str
       }),
     });
     const json = (await res.json()) as {
-      message?: { success?: boolean; data?: { name?: string } };
+      message?: {
+        success?: boolean;
+        data?: { name?: string };
+        error?: { code?: string; message?: string };
+      };
     };
+    if (json.message?.success === false) {
+      const code = json.message.error?.code || "";
+      const msg = json.message.error?.message || "Could not create order";
+      if (code.startsWith("POOL_") || /pool|ram|disk/i.test(msg)) {
+        throw new Error(msg);
+      }
+      // Non-pool failures: continue provisioning without an order row
+      return undefined;
+    }
     return json.message?.data?.name;
-  } catch {
+  } catch (err) {
+    if (err instanceof Error && /pool|ram|disk|not enough/i.test(err.message)) {
+      throw err;
+    }
     return undefined;
   }
 }
@@ -141,6 +174,12 @@ export function toUserError(raw: string): string {
   }
   if (lower.includes("rate limit")) {
     return "Too many attempts. Please wait a while and try again.";
+  }
+  if (lower.includes("not enough ram") || lower.includes("pool_ram") || lower.includes("ram in the server pool")) {
+    return "The server RAM pool is full for this plan. Free capacity or choose a smaller plan.";
+  }
+  if (lower.includes("not enough disk") || lower.includes("pool_disk") || lower.includes("disk in the server pool")) {
+    return "The server disk pool is full for this plan. Free capacity or choose a smaller plan.";
   }
   if (lower.includes("install-app") || lower.includes("new-site")) {
     return "We could not finish installing your site. Please try again, or contact support if it keeps failing.";

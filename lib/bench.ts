@@ -346,6 +346,83 @@ export async function listAppsOnSite(env: BenchEnv, site: string): Promise<RunRe
   return runOnBench(env, ["bench", "--site", assertSiteName(site), "list-apps"]);
 }
 
+/** Run a command on the DO host (or local docker CLI), not inside the backend container. */
+export async function runOnHost(
+  env: BenchEnv,
+  argv: string[],
+  opts?: { timeoutMs?: number },
+): Promise<RunResult> {
+  for (const a of argv) {
+    if (typeof a !== "string" || a.includes("\0")) {
+      return {
+        ok: false,
+        code: 1,
+        stdout: "",
+        stderr: "Invalid argv token",
+        command: argv.join(" "),
+      };
+    }
+  }
+
+  if (env === "local") {
+    return runCommand(argv[0], argv.slice(1), opts);
+  }
+
+  const cfg = getDoSshConfig();
+  if ("error" in cfg) {
+    return { ok: false, code: 1, stdout: "", stderr: cfg.error, command: "ssh" };
+  }
+  const remote = argv.map(shQuote).join(" ");
+  return runCommand("ssh", [...sshBaseArgs(cfg), "--", remote], opts);
+}
+
+/** Soft disk usage of a site directory in MB (`du -sm`). */
+export async function getSiteDiskMb(env: BenchEnv, site: string): Promise<number> {
+  const safe = assertSiteName(site);
+  const result = await runOnBench(env, ["du", "-sm", `sites/${safe}`], { timeoutMs: 60_000 });
+  if (!result.ok) return 0;
+  const first = result.stdout.trim().split(/\s+/)[0];
+  const mb = Number.parseInt(first || "0", 10);
+  return Number.isFinite(mb) && mb >= 0 ? mb : 0;
+}
+
+/**
+ * Soft RAM for the shared backend container (MB) from `docker stats --no-stream`.
+ * Sites share one bench — callers attribute this across Active sites.
+ */
+export async function getBackendMemMb(env: BenchEnv): Promise<number> {
+  const container =
+    env === "local"
+      ? process.env.LOCAL_BACKEND_CONTAINER?.trim() || "erpnext-backend-1"
+      : (() => {
+          const cfg = getDoSshConfig();
+          return "error" in cfg ? "frappe_docker-backend-1" : cfg.backendContainer;
+        })();
+
+  const result = await runOnHost(
+    env,
+    ["docker", "stats", "--no-stream", "--format", "{{.MemUsage}}", container],
+    { timeoutMs: 30_000 },
+  );
+  if (!result.ok) return 0;
+  // e.g. "1.234GiB / 7.765GiB" or "512MiB / 7.765GiB"
+  const used = result.stdout.trim().split("/")[0]?.trim() || "";
+  return parseDockerMemToMb(used);
+}
+
+export function parseDockerMemToMb(raw: string): number {
+  const m = raw.trim().match(/^([\d.]+)\s*([KMGT]?i?B)$/i);
+  if (!m) return 0;
+  const n = Number.parseFloat(m[1]);
+  if (!Number.isFinite(n)) return 0;
+  const unit = m[2].toUpperCase();
+  if (unit.startsWith("G")) return Math.round(n * 1024);
+  if (unit.startsWith("M")) return Math.round(n);
+  if (unit.startsWith("K")) return Math.max(1, Math.round(n / 1024));
+  if (unit.startsWith("T")) return Math.round(n * 1024 * 1024);
+  return Math.round(n / (1024 * 1024));
+}
+
 /** Verify hostname resolves to droplet IP (wildcard DNS). */
 export async function verifyDns(hostname: string): Promise<{ ok: boolean; message: string }> {
   const expected = dropletIp();
