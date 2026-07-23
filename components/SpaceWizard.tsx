@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 
 type Catalog = {
@@ -21,15 +21,24 @@ const STEPS = ["Site", "Apps", "Plan", "Install"] as const;
 
 /** Friendly install checklist — labels only, no ops/workflow secrets. */
 const INSTALL_STEPS = [
-  { id: "validate", label: "Checking your site name" },
-  { id: "dns", label: "Connecting your subdomain" },
-  { id: "new-site", label: "Creating your ERPNext site" },
-  { id: "apps", label: "Installing selected apps" },
-  { id: "cache", label: "Finishing setup" },
+  { id: "validate", label: "Checking your site name", typicalMs: 20_000 },
+  { id: "dns", label: "Connecting your subdomain", typicalMs: 30_000 },
+  { id: "new-site", label: "Creating your ERPNext site", typicalMs: 15 * 60_000 },
+  { id: "apps", label: "Installing selected apps", typicalMs: 8 * 60_000 },
+  { id: "cache", label: "Finishing setup", typicalMs: 60_000 },
 ] as const;
 
 /** Soft mid-levels while a step is still running (real finish = 100%). */
-const RUNNING_LEVELS = [20, 50, 80] as const;
+const RUNNING_LEVELS = [20, 50, 80, 92] as const;
+
+function softPercentForElapsed(elapsedMs: number, typicalMs: number): number {
+  const t = Math.min(1, Math.max(0, elapsedMs / typicalMs));
+  // Ease toward 92% over the typical duration — never 100 until server says done
+  if (t < 0.15) return 20;
+  if (t < 0.4) return 50;
+  if (t < 0.75) return 80;
+  return 92;
+}
 
 function StageIcon({ status }: { status: string }) {
   if (status === "succeeded" || status === "skipped") {
@@ -114,9 +123,10 @@ export function SpaceWizard() {
   const [error, setError] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
   const [job, setJob] = useState<JobView | null>(null);
-  /** Soft % for the currently running step: 20 → 50 → 80 */
+  /** Soft % for the currently running step (20 / 50 / 80 / 92). */
   const [runningLevel, setRunningLevel] = useState<(typeof RUNNING_LEVELS)[number]>(20);
   const [activeRunningId, setActiveRunningId] = useState<string | null>(null);
+  const runningStartedAt = useRef<number>(Date.now());
 
   useEffect(() => {
     void fetch("/api/catalog")
@@ -140,7 +150,6 @@ export function SpaceWizard() {
             return;
           }
           misses += 1;
-          // Job store lost (dev reload) or never created — fail clearly for the user
           if (r.status === 404 && misses >= 3) {
             setJob({
               id: jobId,
@@ -158,34 +167,42 @@ export function SpaceWizard() {
     return () => clearInterval(t);
   }, [jobId]);
 
-  // Soft progress while waiting for first stage, then 20 → 50 → 80 on active step
-  useEffect(() => {
-    if (!jobId) return;
-    if (job?.status === "failed" || job?.status === "succeeded") return;
-
+  // Track which stage is active (stable across job poll updates)
+  const runningStageId = useMemo(() => {
+    if (!jobId) return null;
+    if (job?.status === "failed" || job?.status === "succeeded") return null;
     const running = job?.stages.find((s) => s.status === "running");
-    const id = running?.id || (job?.status === "queued" || !job ? "__queued__" : null);
+    if (running) return running.id;
+    if (!job || job.stages.length === 0 || job.status === "queued") return "__queued__";
+    return null;
+  }, [job, jobId]);
 
-    if (id && id !== activeRunningId) {
-      setActiveRunningId(id);
+  useEffect(() => {
+    if (!runningStageId) return;
+    if (runningStageId !== activeRunningId) {
+      setActiveRunningId(runningStageId);
+      runningStartedAt.current = Date.now();
       setRunningLevel(20);
     }
+  }, [runningStageId, activeRunningId]);
 
-    // Kick first step visually even before server stages arrive
-    if ((!job || job.stages.length === 0) && jobId) {
-      setActiveRunningId("__queued__");
-    }
+  // Advance soft % from elapsed time — not reset by job polling
+  useEffect(() => {
+    if (!activeRunningId || !jobId) return;
+    if (job?.status === "failed" || job?.status === "succeeded") return;
 
-    const t = setInterval(() => {
-      setRunningLevel((prev) => {
-        const idx = RUNNING_LEVELS.indexOf(prev);
-        if (idx < 0) return 20;
-        if (idx >= RUNNING_LEVELS.length - 1) return RUNNING_LEVELS[RUNNING_LEVELS.length - 1];
-        return RUNNING_LEVELS[idx + 1];
-      });
-    }, 3500);
+    const stepDef =
+      INSTALL_STEPS.find((s) => s.id === activeRunningId) || INSTALL_STEPS[0];
+    const typicalMs = stepDef.typicalMs;
+
+    const tick = () => {
+      const elapsed = Date.now() - runningStartedAt.current;
+      setRunningLevel(softPercentForElapsed(elapsed, typicalMs) as (typeof RUNNING_LEVELS)[number]);
+    };
+    tick();
+    const t = setInterval(tick, 2000);
     return () => clearInterval(t);
-  }, [job, jobId, activeRunningId]);
+  }, [activeRunningId, jobId, job?.status]);
 
   const stepPercents = useMemo(() => {
     return INSTALL_STEPS.map((stepDef, index) => {
@@ -202,6 +219,16 @@ export function SpaceWizard() {
     const sum = stepPercents.reduce((a, b) => a + b, 0);
     return Math.min(99, Math.round(sum / INSTALL_STEPS.length));
   }, [job, stepPercents]);
+
+  const activeHint = useMemo(() => {
+    if (activeRunningId === "new-site") {
+      return "Creating the site can take 10–20 minutes. Progress moves 20% → 50% → 80% while it works.";
+    }
+    if (activeRunningId === "apps") {
+      return "Installing apps can take several minutes.";
+    }
+    return "Still installing — keep this page open.";
+  }, [activeRunningId]);
 
   const hostname = useMemo(() => {
     const s = slug.trim().toLowerCase();
@@ -249,6 +276,7 @@ export function SpaceWizard() {
     setJobId(null);
     setRunningLevel(20);
     setActiveRunningId(null);
+    runningStartedAt.current = Date.now();
     try {
       const res = await fetch("/api/provision", {
         method: "POST",
@@ -485,7 +513,7 @@ export function SpaceWizard() {
                     {(!job || job.status === "queued" || job.status === "running") && (
                       <div className="rounded-xl bg-[var(--space-accent-soft)] px-4 py-3 text-sm text-[var(--space-ink)]">
                         <div className="flex items-center justify-between gap-3">
-                          <span>Still installing — keep this page open.</span>
+                          <span>{activeHint}</span>
                           <span className="tabular-nums font-semibold text-[var(--space-accent)]">
                             {overallPercent}%
                           </span>
