@@ -22,57 +22,21 @@ const STEPS = ["Site", "Apps", "Plan", "Install"] as const;
 
 /** Friendly install checklist — labels only, no ops/workflow secrets. */
 const INSTALL_STEPS = [
-  { id: "validate", label: "Checking your site name", level: 20 },
-  { id: "dns", label: "Connecting your subdomain", level: 40 },
-  { id: "new-site", label: "Creating your ERPNext site", level: 60 },
-  { id: "apps", label: "Installing selected apps", level: 80 },
-  { id: "cache", label: "Finishing setup", level: 100 },
+  { id: "validate", label: "Checking your site name" },
+  { id: "dns", label: "Connecting your subdomain" },
+  { id: "new-site", label: "Creating your ERPNext site" },
+  { id: "apps", label: "Installing selected apps" },
+  { id: "cache", label: "Finishing setup" },
 ] as const;
 
-function stageStatus(
-  stepDef: (typeof INSTALL_STEPS)[number],
-  job: JobView | null,
-): string {
-  const live = job?.stages.find((s) => s.id === stepDef.id);
-  let status = live?.status || "pending";
-  if (!live && job?.status === "succeeded") status = "succeeded";
-  if (!live && job?.status === "running" && job.stages.some((s) => s.status === "running")) {
-    const runningIdx = INSTALL_STEPS.findIndex(
-      (s) => job.stages.find((x) => x.id === s.id)?.status === "running",
-    );
-    const thisIdx = INSTALL_STEPS.findIndex((s) => s.id === stepDef.id);
-    if (thisIdx < runningIdx) status = "succeeded";
-  }
-  return status;
-}
-
-/** Overall install percent: completed steps at their level; running step halfway to next. */
-function installProgress(job: JobView | null): number {
-  if (!job) return 0;
-  if (job.status === "succeeded") return 100;
-  let percent = 0;
-  for (let i = 0; i < INSTALL_STEPS.length; i++) {
-    const stepDef = INSTALL_STEPS[i];
-    const status = stageStatus(stepDef, job);
-    const prevLevel = i === 0 ? 0 : INSTALL_STEPS[i - 1].level;
-    if (status === "succeeded" || status === "skipped") {
-      percent = stepDef.level;
-    } else if (status === "running" || status === "failed") {
-      percent = Math.round((prevLevel + stepDef.level) / 2);
-      break;
-    } else {
-      break;
-    }
-  }
-  if (job.status === "queued") return 5;
-  return percent;
-}
+/** Soft mid-levels while a step is still running (real finish = 100%). */
+const RUNNING_LEVELS = [20, 50, 80] as const;
 
 function StageIcon({ status }: { status: string }) {
   if (status === "succeeded" || status === "skipped") {
     return (
       <span
-        className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--space-accent)] text-white"
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--space-accent)] text-white"
         aria-label="Done"
       >
         <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" aria-hidden>
@@ -90,7 +54,7 @@ function StageIcon({ status }: { status: string }) {
   if (status === "running") {
     return (
       <span
-        className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-[var(--space-accent)] border-t-transparent animate-spin"
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-[var(--space-accent)] border-t-transparent animate-spin"
         aria-label="In progress"
       />
     );
@@ -98,7 +62,7 @@ function StageIcon({ status }: { status: string }) {
   if (status === "failed") {
     return (
       <span
-        className="flex h-8 w-8 items-center justify-center rounded-full bg-red-600 text-white text-sm font-bold"
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-600 text-white text-sm font-bold"
         aria-label="Failed"
       >
         !
@@ -107,10 +71,27 @@ function StageIcon({ status }: { status: string }) {
   }
   return (
     <span
-      className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-[var(--space-ink)]/20"
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-[var(--space-ink)]/20"
       aria-label="Waiting"
     />
   );
+}
+
+function resolveStageStatus(
+  stepId: string,
+  stepIndex: number,
+  job: JobView | null,
+): string {
+  const live = job?.stages.find((s) => s.id === stepId);
+  if (live?.status) return live.status;
+  if (job?.status === "succeeded") return "succeeded";
+  if (job?.status === "running" && job.stages.some((s) => s.status === "running")) {
+    const runningIdx = INSTALL_STEPS.findIndex(
+      (s) => job.stages.find((x) => x.id === s.id)?.status === "running",
+    );
+    if (stepIndex < runningIdx) return "succeeded";
+  }
+  return "pending";
 }
 
 export function SpaceWizard() {
@@ -127,6 +108,9 @@ export function SpaceWizard() {
   const [error, setError] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
   const [job, setJob] = useState<JobView | null>(null);
+  /** Soft % for the currently running step: 20 → 50 → 80 */
+  const [runningLevel, setRunningLevel] = useState<(typeof RUNNING_LEVELS)[number]>(20);
+  const [activeRunningId, setActiveRunningId] = useState<string | null>(null);
 
   useEffect(() => {
     void fetch("/api/catalog")
@@ -148,6 +132,42 @@ export function SpaceWizard() {
     }, 1500);
     return () => clearInterval(t);
   }, [jobId]);
+
+  // Advance soft % on the active step: 20% → 50% → 80%
+  useEffect(() => {
+    const running = job?.stages.find((s) => s.status === "running");
+    const id = running?.id || null;
+    if (id !== activeRunningId) {
+      setActiveRunningId(id);
+      setRunningLevel(20);
+    }
+    if (!id || job?.status === "failed" || job?.status === "succeeded") return;
+    const t = setInterval(() => {
+      setRunningLevel((prev) => {
+        const idx = RUNNING_LEVELS.indexOf(prev);
+        if (idx < 0) return 20;
+        if (idx >= RUNNING_LEVELS.length - 1) return RUNNING_LEVELS[RUNNING_LEVELS.length - 1];
+        return RUNNING_LEVELS[idx + 1];
+      });
+    }, 4500);
+    return () => clearInterval(t);
+  }, [job, activeRunningId]);
+
+  const stepPercents = useMemo(() => {
+    return INSTALL_STEPS.map((stepDef, index) => {
+      const status = resolveStageStatus(stepDef.id, index, job);
+      if (status === "succeeded" || status === "skipped") return 100;
+      if (status === "failed") return runningLevel;
+      if (status === "running") return runningLevel;
+      return 0;
+    });
+  }, [job, runningLevel]);
+
+  const overallPercent = useMemo(() => {
+    if (job?.status === "succeeded") return 100;
+    const sum = stepPercents.reduce((a, b) => a + b, 0);
+    return Math.min(99, Math.round(sum / INSTALL_STEPS.length));
+  }, [job, stepPercents]);
 
   const hostname = useMemo(() => {
     const s = slug.trim().toLowerCase();
@@ -193,6 +213,8 @@ export function SpaceWizard() {
     setError(null);
     setJob(null);
     setJobId(null);
+    setRunningLevel(20);
+    setActiveRunningId(null);
     try {
       const res = await fetch("/api/provision", {
         method: "POST",
@@ -230,8 +252,6 @@ export function SpaceWizard() {
     if (!failed) return null;
     return INSTALL_STEPS.find((s) => s.id === failed.id)?.label || failed.label;
   }, [job]);
-
-  const progressPercent = useMemo(() => installProgress(job), [job]);
 
   return (
     <div className="mx-auto flex min-h-screen max-w-3xl flex-col px-4 py-10 sm:px-6">
@@ -439,84 +459,81 @@ export function SpaceWizard() {
                 )}
                 {(jobId || job) && (
                   <div className="mt-6 space-y-4">
-                    <div>
-                      <div className="mb-2 flex items-baseline justify-between gap-3">
-                        <span className="text-sm font-medium text-[var(--space-ink)]">
-                          {job?.status === "succeeded"
-                            ? "Complete"
-                            : job?.status === "failed"
-                              ? "Stopped"
-                              : "Progress"}
-                        </span>
-                        <span
-                          className={`text-2xl font-semibold tabular-nums ${
-                            job?.status === "failed"
-                              ? "text-red-700"
-                              : "text-[var(--space-accent)]"
-                          }`}
-                          aria-live="polite"
-                        >
-                          {progressPercent}%
-                        </span>
-                      </div>
-                      <div
-                        className="h-2.5 overflow-hidden rounded-full bg-[var(--space-ink)]/10"
-                        role="progressbar"
-                        aria-valuemin={0}
-                        aria-valuemax={100}
-                        aria-valuenow={progressPercent}
-                      >
-                        <div
-                          className={`h-full rounded-full transition-[width] duration-500 ease-out ${
-                            job?.status === "failed"
-                              ? "bg-red-600"
-                              : "bg-[var(--space-accent)]"
-                          }`}
-                          style={{ width: `${progressPercent}%` }}
-                        />
-                      </div>
-                    </div>
                     {(!job || job.status === "queued" || job.status === "running") && (
-                      <p className="rounded-xl bg-[var(--space-accent-soft)] px-4 py-3 text-sm text-[var(--space-ink)]">
-                        Still installing — this can take several minutes. Keep this page open.
-                      </p>
+                      <div className="rounded-xl bg-[var(--space-accent-soft)] px-4 py-3 text-sm text-[var(--space-ink)]">
+                        <div className="flex items-center justify-between gap-3">
+                          <span>Still installing — keep this page open.</span>
+                          <span className="tabular-nums font-semibold text-[var(--space-accent)]">
+                            {overallPercent}%
+                          </span>
+                        </div>
+                        <div
+                          className="mt-2 h-2 overflow-hidden rounded-full bg-white/70"
+                          role="progressbar"
+                          aria-valuenow={overallPercent}
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                        >
+                          <div
+                            className="h-full rounded-full bg-[var(--space-accent)] transition-[width] duration-700 ease-out"
+                            style={{ width: `${overallPercent}%` }}
+                          />
+                        </div>
+                      </div>
                     )}
                     {job?.status === "succeeded" && (
                       <p className="rounded-xl bg-[var(--space-accent-soft)] px-4 py-3 text-sm font-medium text-[var(--space-accent)]">
-                        Your site is ready (100%).
+                        Your site is ready — 100%
                       </p>
                     )}
-                    <ol className="space-y-3">
-                      {INSTALL_STEPS.map((stepDef) => {
-                        const status = stageStatus(stepDef, job);
+                    <ol className="space-y-4">
+                      {INSTALL_STEPS.map((stepDef, index) => {
+                        const status = resolveStageStatus(stepDef.id, index, job);
+                        const pct = stepPercents[index] ?? 0;
                         return (
-                          <li key={stepDef.id} className="flex items-center gap-3 text-sm">
+                          <li key={stepDef.id} className="flex gap-3 text-sm">
                             <StageIcon status={status} />
-                            <span
-                              className={`min-w-0 flex-1 ${
-                                status === "succeeded"
-                                  ? "font-medium text-[var(--space-ink)]"
-                                  : status === "running"
-                                    ? "font-medium text-[var(--space-accent)]"
-                                    : status === "failed"
-                                      ? "font-medium text-red-700"
-                                      : "text-[var(--space-ink)]/50"
-                              }`}
-                            >
-                              {stepDef.label}
-                              {status === "failed" ? " — failed" : ""}
-                            </span>
-                            <span
-                              className={`shrink-0 tabular-nums text-xs ${
-                                status === "succeeded" || status === "running"
-                                  ? "font-medium text-[var(--space-ink)]/70"
-                                  : status === "failed"
-                                    ? "font-medium text-red-700"
-                                    : "text-[var(--space-ink)]/35"
-                              }`}
-                            >
-                              {stepDef.level}%
-                            </span>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center justify-between gap-2">
+                                <span
+                                  className={
+                                    status === "succeeded"
+                                      ? "font-medium text-[var(--space-ink)]"
+                                      : status === "running"
+                                        ? "font-medium text-[var(--space-accent)]"
+                                        : status === "failed"
+                                          ? "font-medium text-red-700"
+                                          : "text-[var(--space-ink)]/50"
+                                  }
+                                >
+                                  {stepDef.label}
+                                  {status === "failed" ? " — failed" : ""}
+                                </span>
+                                <span
+                                  className={`tabular-nums text-xs font-semibold ${
+                                    status === "succeeded"
+                                      ? "text-[var(--space-accent)]"
+                                      : status === "running"
+                                        ? "text-[var(--space-accent)]"
+                                        : status === "failed"
+                                          ? "text-red-700"
+                                          : "text-[var(--space-ink)]/35"
+                                  }`}
+                                >
+                                  {pct}%
+                                </span>
+                              </div>
+                              <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[var(--space-ink)]/10">
+                                <div
+                                  className={`h-full rounded-full transition-[width] duration-700 ease-out ${
+                                    status === "failed"
+                                      ? "bg-red-600"
+                                      : "bg-[var(--space-accent)]"
+                                  }`}
+                                  style={{ width: `${pct}%` }}
+                                />
+                              </div>
+                            </div>
                           </li>
                         );
                       })}
