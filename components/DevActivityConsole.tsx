@@ -10,99 +10,162 @@ type DevJob = {
   log?: string[];
   error?: string;
   meta?: Record<string, string>;
-  createdAt?: number;
-  updatedAt?: number;
-  result?: { deskUrl?: string; hostname?: string };
+};
+
+type JobRow = {
+  id: string;
+  status: string;
+  meta?: Record<string, string>;
+  updatedAt: number;
+  logTail: string[];
+  stages: { id: string; status: string }[];
+  error?: string;
 };
 
 export function DevActivityConsole({
   jobId,
-  openDefault = true,
+  compact = true,
 }: {
   jobId?: string | null;
-  openDefault?: boolean;
+  /** Small dock panel (default). */
+  compact?: boolean;
 }) {
-  const [open, setOpen] = useState(openDefault);
-  const [job, setJob] = useState<DevJob | null>(null);
+  const [open, setOpen] = useState(false);
   const [enabled, setEnabled] = useState(false);
+  const [live, setLive] = useState<DevJob | null>(null);
+  const [jobs, setJobs] = useState<JobRow[]>([]);
+  const [picked, setPicked] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
 
+  const activeId = jobId || picked || jobs[0]?.id || null;
+
   useEffect(() => {
-    if (!jobId || !open) return;
+    if (!open) return;
     let alive = true;
-    const poll = () => {
-      void fetch(`/api/jobs/${jobId}`)
+
+    const loadList = () => {
+      void fetch("/api/jobs")
         .then((r) => r.json())
         .then((d) => {
           if (!alive) return;
-          setEnabled(Boolean(d.dev));
-          if (d.ok && d.job) setJob(d.job);
+          if (d.ok) {
+            setEnabled(true);
+            setJobs(d.jobs || []);
+          } else {
+            setEnabled(false);
+          }
         })
         .catch(() => undefined);
     };
-    poll();
-    const t = setInterval(poll, 1500);
+
+    const loadJob = () => {
+      if (!activeId) return;
+      void fetch(`/api/jobs/${activeId}`)
+        .then((r) => r.json())
+        .then((d) => {
+          if (!alive) return;
+          if (d.dev) setEnabled(true);
+          if (d.ok && d.job) setLive(d.job);
+        })
+        .catch(() => undefined);
+    };
+
+    loadList();
+    loadJob();
+    const t = setInterval(() => {
+      loadList();
+      loadJob();
+    }, 1500);
     return () => {
       alive = false;
       clearInterval(t);
     };
-  }, [jobId, open]);
+  }, [open, activeId]);
 
   useEffect(() => {
     if (open) endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [job?.log?.length, open]);
+  }, [live?.log?.length, open]);
 
-  if (!jobId) return null;
+  const lines = live?.log?.length
+    ? live.log
+    : jobs.find((j) => j.id === activeId)?.logTail || [];
+
+  if (!compact) {
+    // fallback unused — keep API stable
+  }
 
   return (
-    <div className="mt-6 overflow-hidden rounded-xl border border-[var(--space-ink)]/15 bg-[var(--space-ink)] text-[var(--space-mist)]">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-xs font-medium tracking-wide uppercase"
-      >
-        <span>Dev activity console</span>
-        <span className="opacity-60">{open ? "Hide" : "Show"}</span>
-      </button>
+    <div className="fixed bottom-4 right-4 z-50 flex flex-col items-end gap-2">
       {open && (
-        <div className="border-t border-white/10 px-4 py-3">
+        <div className="flex w-[min(100vw-2rem,22rem)] flex-col overflow-hidden rounded-xl border border-[var(--space-ink)]/20 bg-[var(--space-ink)] text-[var(--space-mist)] shadow-xl">
+          <div className="flex items-center justify-between gap-2 border-b border-white/10 px-3 py-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wide">
+              Dev activity
+            </span>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="text-[11px] opacity-60 hover:opacity-100"
+            >
+              Close
+            </button>
+          </div>
+
           {!enabled && (
-            <p className="text-xs text-amber-200/90">
-              Console waiting for job data… (enable NEXT_PUBLIC_SPACE_DEV_CONSOLE=1 if empty)
+            <p className="px-3 py-2 text-[11px] text-amber-200/90">
+              Console off — set NEXT_PUBLIC_SPACE_DEV_CONSOLE=1
             </p>
           )}
-          {job && (
-            <div className="mb-3 space-y-1 text-xs opacity-80">
+
+          {jobs.length > 0 && (
+            <div className="flex gap-1 overflow-x-auto border-b border-white/10 px-2 py-1.5">
+              {jobs.slice(0, 6).map((j) => (
+                <button
+                  key={j.id}
+                  type="button"
+                  onClick={() => setPicked(j.id)}
+                  className={`shrink-0 rounded px-2 py-0.5 text-[10px] ${
+                    activeId === j.id ? "bg-[var(--space-accent)] text-white" : "bg-white/10"
+                  }`}
+                  title={j.id}
+                >
+                  {(j.meta?.hostname || j.id).replace(".zatgo.online", "")}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {live && (
+            <div className="space-y-1 border-b border-white/10 px-3 py-1.5 text-[10px] opacity-80">
               <div>
-                job <code className="text-[var(--space-accent-soft)]">{job.id}</code> · {job.status}
-                {job.meta?.hostname ? ` · ${job.meta.hostname}` : ""}
+                {live.status}
+                {live.meta?.hostname ? ` · ${live.meta.hostname}` : ""}
               </div>
-              <div className="flex flex-wrap gap-2">
-                {(job.stages || []).map((s) => (
-                  <span
-                    key={s.id}
-                    className="rounded bg-white/10 px-2 py-0.5"
-                  >
+              <div className="flex flex-wrap gap-1">
+                {(live.stages || []).map((s) => (
+                  <span key={s.id} className="rounded bg-white/10 px-1.5 py-0.5">
                     {s.id}:{s.status}
                   </span>
                 ))}
               </div>
-              {job.error && <div className="text-red-300">error: {job.error}</div>}
+              {live.error && <div className="text-red-300">{live.error}</div>}
             </div>
           )}
-          <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed text-[var(--space-mist)]/90">
-            {(job?.log || []).length
-              ? (job?.log || []).join("\n")
-              : "No activity lines yet…"}
+
+          <pre className="h-40 overflow-auto whitespace-pre-wrap break-all px-3 py-2 font-mono text-[10px] leading-snug text-[var(--space-mist)]/90">
+            {lines.length ? lines.slice(-80).join("\n") : "No activity yet…"}
             <div ref={endRef} />
           </pre>
-          <div className="mt-3 text-right">
-            <a href="/dev" className="text-xs text-[var(--space-accent-soft)] underline">
-              Open full activity screen
-            </a>
-          </div>
         </div>
       )}
+
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="rounded-full bg-[var(--space-ink)] px-4 py-2 text-xs font-medium text-white shadow-lg ring-1 ring-white/10 hover:bg-[var(--space-ink)]/90"
+      >
+        {open ? "Hide logs" : "Dev logs"}
+      </button>
     </div>
   );
 }

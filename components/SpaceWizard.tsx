@@ -328,12 +328,9 @@ export function SpaceWizard() {
             </h1>
           </div>
           {showDevConsole && (
-            <a
-              href="/dev"
-              className="shrink-0 rounded-lg border border-[var(--space-ink)]/15 bg-white/60 px-3 py-1.5 text-xs font-medium text-[var(--space-ink)]/70 hover:bg-white"
-            >
-              Dev console
-            </a>
+            <span className="shrink-0 rounded-lg border border-[var(--space-ink)]/15 bg-white/60 px-3 py-1.5 text-xs font-medium text-[var(--space-ink)]/50">
+              Dev logs: bottom-right
+            </span>
           )}
         </div>
         <p className="mt-3 max-w-xl text-base text-[var(--space-ink)]/70">
@@ -635,7 +632,6 @@ export function SpaceWizard() {
                         </button>
                       </div>
                     )}
-                    {showDevConsole && <DevActivityConsole jobId={jobId} />}
                   </div>
                 )}
               </section>
@@ -681,6 +677,7 @@ export function SpaceWizard() {
           )}
         </div>
       </div>
+      {showDevConsole && <DevActivityConsole jobId={jobId} />}
     </div>
   );
 }
