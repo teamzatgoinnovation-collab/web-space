@@ -96,6 +96,64 @@ function siteHelpLine(site: SiteUsageRow): string {
   return "Open Desk to sign in as Administrator.";
 }
 
+function SkeletonBlock({ className }: { className?: string }) {
+  return (
+    <div
+      className={`animate-pulse rounded-lg bg-[var(--space-ink)]/[0.08] ${className || ""}`}
+      aria-hidden
+    />
+  );
+}
+
+function SitesSkeleton() {
+  return (
+    <div aria-busy="true" aria-live="polite">
+      <p className="mb-4 text-sm text-[var(--space-ink)]/55">Loading your sites…</p>
+      <div className="grid gap-4 sm:grid-cols-3">
+        {[0, 1, 2].map((i) => (
+          <div
+            key={i}
+            className="rounded-2xl border border-[var(--space-ink)]/10 bg-white/70 p-5 backdrop-blur"
+          >
+            <SkeletonBlock className="h-3 w-16" />
+            <SkeletonBlock className="mt-3 h-8 w-24" />
+            <SkeletonBlock className="mt-2 h-3 w-32" />
+            {i === 1 ? <SkeletonBlock className="mt-3 h-2 w-full rounded-full" /> : null}
+          </div>
+        ))}
+      </div>
+      <div className="mt-10">
+        <SkeletonBlock className="h-5 w-28" />
+        <ul className="mt-4 space-y-3">
+          {[0, 1, 2, 3].map((i) => (
+            <li
+              key={i}
+              className="rounded-2xl border border-[var(--space-ink)]/10 bg-white/70 p-5 backdrop-blur"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <SkeletonBlock className="h-5 w-48 max-w-full" />
+                  <SkeletonBlock className="mt-2 h-3 w-64 max-w-full" />
+                </div>
+                <SkeletonBlock className="h-6 w-16 shrink-0 rounded-full" />
+              </div>
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                <SkeletonBlock className="h-5 w-14" />
+                <SkeletonBlock className="h-5 w-16" />
+                <SkeletonBlock className="h-5 w-12" />
+              </div>
+              <div className="mt-4 flex items-center justify-between gap-3">
+                <SkeletonBlock className="h-4 w-36" />
+                <SkeletonBlock className="h-7 w-24 rounded-lg" />
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
 export function SitesDashboard() {
   const [pool, setPool] = useState<PoolSummary | null>(null);
   const [measured, setMeasured] = useState<MeasuredBench | null>(null);
@@ -173,10 +231,12 @@ export function SitesDashboard() {
       )}
 
       {loading && !measured ? (
-        <p className="text-sm text-[var(--space-ink)]/60">Loading your sites…</p>
+        <SitesSkeleton />
       ) : (
         <>
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div
+            className={`grid gap-4 sm:grid-cols-3 ${refreshing ? "opacity-70 transition-opacity" : ""}`}
+          >
             <SummaryCard
               title="Sites"
               value={String(readyCount)}
@@ -214,8 +274,13 @@ export function SitesDashboard() {
             </p>
           )}
 
-          <section className="mt-10">
-            <h2 className="text-lg font-semibold">All sites</h2>
+          <section className={`mt-10 ${refreshing ? "opacity-70 transition-opacity" : ""}`}>
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-lg font-semibold">All sites</h2>
+              {refreshing ? (
+                <span className="text-xs text-[var(--space-ink)]/45">Updating…</span>
+              ) : null}
+            </div>
             {sites.length === 0 ? (
               <div className="mt-4 rounded-2xl border border-dashed border-[var(--space-ink)]/20 bg-white/40 px-6 py-10 text-center">
                 <p className="text-sm text-[var(--space-ink)]/65">You don’t have any sites yet.</p>
