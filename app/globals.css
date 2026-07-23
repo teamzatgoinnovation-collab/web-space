@@ -1,0 +1,20 @@
+@import "tailwindcss";
+@import "@zatgo/ui/globals.css";
+
+:root {
+  --space-ink: #0f1c2e;
+  --space-mist: #e8eef5;
+  --space-accent: #1a6b5c;
+  --space-accent-soft: #d4ebe5;
+  --space-sand: #f3efe6;
+}
+
+body {
+  font-family: "Segoe UI", "Helvetica Neue", sans-serif;
+  color: var(--space-ink);
+  background:
+    radial-gradient(1200px 600px at 10% -10%, #d4ebe5 0%, transparent 55%),
+    radial-gradient(900px 500px at 100% 0%, #c5d4e8 0%, transparent 50%),
+    linear-gradient(180deg, var(--space-sand) 0%, var(--space-mist) 100%);
+  min-height: 100vh;
+}
