@@ -152,6 +152,8 @@ export function SpaceWizard() {
   const startInstall = useCallback(async () => {
     setBusy(true);
     setError(null);
+    setJob(null);
+    setJobId(null);
     try {
       const res = await fetch("/api/provision", {
         method: "POST",
@@ -166,7 +168,7 @@ export function SpaceWizard() {
         }),
       });
       const data = await res.json();
-      if (!data.ok) throw new Error(data.error || "Provisioning failed");
+      if (!data.ok) throw new Error(data.error || "Could not start installation");
       setJobId(data.jobId);
       setStep(3);
     } catch (err) {
@@ -175,6 +177,20 @@ export function SpaceWizard() {
       setBusy(false);
     }
   }, [slug, password, selectedApps, plan, payment, inviteCode]);
+
+  const retryInstall = () => {
+    setError(null);
+    setJob(null);
+    setJobId(null);
+    void startInstall();
+  };
+
+  const failedStepLabel = useMemo(() => {
+    if (!job || job.status !== "failed") return null;
+    const failed = job.stages.find((s) => s.status === "failed");
+    if (!failed) return null;
+    return INSTALL_STEPS.find((s) => s.id === failed.id)?.label || failed.label;
+  }, [job]);
 
   return (
     <div className="mx-auto flex min-h-screen max-w-3xl flex-col px-4 py-10 sm:px-6">
@@ -370,7 +386,7 @@ export function SpaceWizard() {
                     ? `Setting up ${hostname}`
                     : "We will set up your site and open ERPNext when ready."}
                 </p>
-                {!jobId && (
+                {!jobId && !job && (
                   <button
                     type="button"
                     disabled={busy}
@@ -382,11 +398,20 @@ export function SpaceWizard() {
                 )}
                 {(jobId || job) && (
                   <div className="mt-6 space-y-4">
+                    {(!job || job.status === "queued" || job.status === "running") && (
+                      <p className="rounded-xl bg-[var(--space-accent-soft)] px-4 py-3 text-sm text-[var(--space-ink)]">
+                        Still installing — this can take several minutes. Keep this page open.
+                      </p>
+                    )}
+                    {job?.status === "succeeded" && (
+                      <p className="rounded-xl bg-[var(--space-accent-soft)] px-4 py-3 text-sm font-medium text-[var(--space-accent)]">
+                        Your site is ready.
+                      </p>
+                    )}
                     <ol className="space-y-3">
                       {INSTALL_STEPS.map((stepDef) => {
                         const live = job?.stages.find((s) => s.id === stepDef.id);
                         let status = live?.status || "pending";
-                        if (!live && job?.status === "failed") status = "pending";
                         if (!live && job?.status === "succeeded") status = "succeeded";
                         if (
                           !live &&
@@ -414,6 +439,7 @@ export function SpaceWizard() {
                               }
                             >
                               {stepDef.label}
+                              {status === "failed" ? " — failed" : ""}
                             </span>
                           </li>
                         );
@@ -428,9 +454,27 @@ export function SpaceWizard() {
                       </a>
                     )}
                     {job?.status === "failed" && (
-                      <p className="text-sm text-red-700">
-                        {job.error || "Installation failed. Try again or contact support."}
-                      </p>
+                      <div
+                        role="alert"
+                        className="rounded-xl border border-red-200 bg-red-50 px-4 py-4 text-sm text-red-900"
+                      >
+                        <p className="font-semibold">Installation could not finish</p>
+                        {failedStepLabel && (
+                          <p className="mt-1 opacity-80">Stopped at: {failedStepLabel}</p>
+                        )}
+                        <p className="mt-2">
+                          {job.error ||
+                            "Something went wrong while creating your site. Please try again."}
+                        </p>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={retryInstall}
+                          className="mt-4 rounded-xl bg-red-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                        >
+                          {busy ? "Starting…" : "Try again"}
+                        </button>
+                      </div>
                     )}
                   </div>
                 )}
@@ -445,7 +489,11 @@ export function SpaceWizard() {
           <button
             type="button"
             onClick={back}
-            disabled={step === 0 || Boolean(jobId)}
+            disabled={
+              step === 0 ||
+              busy ||
+              (Boolean(jobId) && job?.status !== "failed" && job?.status !== "succeeded")
+            }
             className="rounded-xl px-4 py-2 text-sm font-medium text-[var(--space-ink)]/70 disabled:opacity-30"
           >
             Back

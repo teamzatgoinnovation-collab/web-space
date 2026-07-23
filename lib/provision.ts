@@ -124,6 +124,47 @@ export async function createControlOrder(payload: ProvisionPayload): Promise<str
   }
 }
 
+export function toUserError(raw: string): string {
+  const msg = (raw || "").trim();
+  const lower = msg.toLowerCase();
+  if (!msg) return "Something went wrong while creating your site. Please try again.";
+  if (lower.includes("reserved")) {
+    return "That site name is reserved. Please go back and choose a different name.";
+  }
+  if (lower.includes("invalid subdomain") || lower.includes("invalid slug")) {
+    return "That site name is not valid. Use lowercase letters, numbers, and hyphens.";
+  }
+  if (lower.includes("password")) {
+    return "The Administrator password must be at least 8 characters.";
+  }
+  if (lower.includes("already exists") || lower.includes("hostname_taken") || lower.includes("taken")) {
+    return "A site with this name already exists. Please choose another subdomain.";
+  }
+  if (lower.includes("dns") || lower.includes("resolve") || lower.includes("namecheap")) {
+    return "Your subdomain is not reachable yet. Wait a few minutes for DNS, then try again.";
+  }
+  if (lower.includes("do_db_root") || lower.includes("mariadb") || lower.includes("db root")) {
+    return "The server is not fully configured for new sites. Contact ZatGo support.";
+  }
+  if (lower.includes("ssh") || lower.includes("not found") || lower.includes("connection")) {
+    return "Could not reach the server. Check your connection and try again.";
+  }
+  if (lower.includes("rate limit")) {
+    return "Too many attempts. Please wait a while and try again.";
+  }
+  if (lower.includes("invite")) {
+    return "A valid invite code is required to create a site.";
+  }
+  if (lower.includes("install-app") || lower.includes("new-site")) {
+    return "We could not finish installing your site. Please try again, or contact support if it keeps failing.";
+  }
+  // Never surface raw bench/ssh dumps to the customer UI.
+  if (msg.length > 180 || /traceback|stderr|docker|bench |--mariadb/i.test(msg)) {
+    return "Installation stopped unexpectedly. Please try again. If it fails again, contact ZatGo support.";
+  }
+  return msg;
+}
+
 export function startProvisionJob(payload: ProvisionPayload): string {
   const slug = payload.slug.trim().toLowerCase();
   const hostname = `${slug}.${domainSuffix()}`;
@@ -221,7 +262,7 @@ export function startProvisionJob(payload: ProvisionPayload): string {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       appendLog(jobId, `ERROR: ${message}`);
-      setJobStatus(jobId, "failed", message);
+      setJobStatus(jobId, "failed", toUserError(message));
       const running = job.stages.find((s) => s.status === "running");
       if (running) finishStage(jobId, running.id, "failed");
       if (orderName) {
@@ -229,10 +270,10 @@ export function startProvisionJob(payload: ProvisionPayload): string {
           name: orderName,
           status: "Failed",
           job_id: jobId,
-          error_message: message,
+          error_message: toUserError(message),
           stage: running?.id || "failed",
           stage_status: "failed",
-          message,
+          message: toUserError(message),
         });
       }
     }
