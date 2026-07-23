@@ -2,19 +2,26 @@
 
 **Package:** `@zatgo/space-web`  
 **Port:** 3010  
-**Role:** Public self-serve wizard to create ERPNext sites as `{slug}.zatgo.online` on the DigitalOcean Docker bench.
+**Role:** Self-serve wizard to create ERPNext sites as `{slug}.zatgo.online` on the **shared Docker bench**.
 
-## Control plane
+## Architecture (Docker-first)
 
-Orders, plans, and soft quotas live in **space-web** (`data/control/store.json`).  
-**`erp.zatgo.online` is not required.**
+```
+Docker bench (frappe_docker-backend-1)
+├── erp.zatgo.online      ← one site (ERP), not the Space control plane
+├── {slug}.zatgo.online   ← Space-created customer sites
+└── apps/                 ← get-app packages (wizard Apps list)
+```
+
+space-web connects to the **bench via SSH**, not to `erp.zatgo.online` APIs.
 
 | Concern | Source |
 |---------|--------|
-| Plans / pool / Space Orders | `data/control/store.json` |
-| Installable apps | Docker bench (`ls apps` via SSH) |
+| Plans / pool / Space Orders | `data/control/store.json` (space-web) |
+| Installable apps | Docker `apps/` (`ls apps` via SSH) |
+| Sites dashboard | Docker `sites/` + Space Orders (erp shown, **not** in Space pool) |
 | Provisioning | SSH → `bench new-site` / `install-app` |
-| Optional Frappe dual-write | `SPACE_FRAPPE_SYNC=1` only |
+| Optional Frappe dual-write | `SPACE_FRAPPE_SYNC=1` only (legacy) |
 
 ## Run
 

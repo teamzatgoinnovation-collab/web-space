@@ -52,13 +52,13 @@ function PoolCard({
         {formatMb(allocated)}
         <span className="text-base font-normal text-[var(--space-ink)]/40"> / {formatMb(pool)}</span>
       </p>
-      <p className="mt-1 text-xs text-[var(--space-ink)]/55">Allocated soft quota</p>
+      <p className="mt-1 text-xs text-[var(--space-ink)]/55">Allocated soft quota (Space Orders)</p>
       <div className="mt-3">
         <ProgressBar value={allocatedPct} />
       </div>
       <div className="mt-4">
         <div className="mb-1 flex justify-between text-xs text-[var(--space-ink)]/55">
-          <span>Measured use (soft)</span>
+          <span>Measured use (Space sites)</span>
           <span>
             {formatMb(used)} · {usedPct}%
           </span>
@@ -67,6 +67,25 @@ function PoolCard({
       </div>
     </div>
   );
+}
+
+function kindBadge(site: SiteUsageRow): { label: string; className: string } {
+  if (site.kind === "erp") {
+    return {
+      label: "Bench / ERP",
+      className: "bg-[var(--space-ink)]/10 text-[var(--space-ink)]/70",
+    };
+  }
+  if (site.kind === "unmanaged") {
+    return {
+      label: "Unmanaged",
+      className: "bg-amber-100 text-amber-900",
+    };
+  }
+  return {
+    label: site.planTitle || site.plan || "Space",
+    className: "bg-[var(--space-accent-soft)] text-[var(--space-accent)]",
+  };
 }
 
 export function SitesDashboard() {
@@ -112,7 +131,8 @@ export function SitesDashboard() {
             Sites
           </h1>
           <p className="mt-3 max-w-xl text-base text-[var(--space-ink)]/70">
-            Soft RAM and disk quotas across the shared Space server pool.
+            Sites on the shared Docker bench. Soft quotas apply to Space Orders only —
+            erp is one bench site, not the control plane.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -140,7 +160,7 @@ export function SitesDashboard() {
       )}
 
       {loading && !pool ? (
-        <p className="text-sm text-[var(--space-ink)]/60">Loading site usage…</p>
+        <p className="text-sm text-[var(--space-ink)]/60">Loading Docker sites…</p>
       ) : pool ? (
         <>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -158,15 +178,16 @@ export function SitesDashboard() {
             />
           </div>
           <p className="mt-3 text-xs text-[var(--space-ink)]/45">
-            {pool.siteCount} site{pool.siteCount === 1 ? "" : "s"} counting toward the pool
+            {pool.siteCount} Space order{pool.siteCount === 1 ? "" : "s"} in pool · {sites.length}{" "}
+            site{sites.length === 1 ? "" : "s"} on Docker
             {source ? ` · metrics: ${source}` : ""}
           </p>
 
           <section className="mt-10">
-            <h2 className="text-lg font-semibold">Active sites</h2>
+            <h2 className="text-lg font-semibold">Docker bench sites</h2>
             {sites.length === 0 ? (
               <div className="mt-4 rounded-2xl border border-dashed border-[var(--space-ink)]/20 bg-white/40 px-6 py-10 text-center">
-                <p className="text-sm text-[var(--space-ink)]/65">No Active Space sites yet.</p>
+                <p className="text-sm text-[var(--space-ink)]/65">No sites found on the Docker bench.</p>
                 <Link
                   href="/"
                   className="mt-4 inline-block text-sm font-medium text-[var(--space-accent)] underline-offset-2 hover:underline"
@@ -177,8 +198,10 @@ export function SitesDashboard() {
             ) : (
               <ul className="mt-4 space-y-3">
                 {sites.map((site) => {
-                  const ramPct = pct(site.ramUsedMb, site.ramLimitMb);
-                  const diskPct = pct(site.diskUsedMb, site.diskLimitMb);
+                  const badge = kindBadge(site);
+                  const hasLimits = site.inPool && site.ramLimitMb > 0;
+                  const ramPct = hasLimits ? pct(site.ramUsedMb, site.ramLimitMb) : 0;
+                  const diskPct = hasLimits ? pct(site.diskUsedMb, site.diskLimitMb) : 0;
                   return (
                     <li
                       key={site.name}
@@ -195,11 +218,16 @@ export function SitesDashboard() {
                             {site.hostname}
                           </a>
                           <p className="mt-0.5 text-xs text-[var(--space-ink)]/55">
-                            {site.planTitle || site.plan} · {site.status}
+                            {site.status}
+                            {site.inPool ? " · in Space pool" : " · outside Space pool"}
                           </p>
                         </div>
-                        <span className="rounded-full bg-[var(--space-accent-soft)] px-3 py-1 text-xs font-medium text-[var(--space-accent)]">
-                          {formatMb(site.ramLimitMb)} RAM · {formatMb(site.diskLimitMb)} disk
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-medium ${badge.className}`}
+                        >
+                          {hasLimits
+                            ? `${formatMb(site.ramLimitMb)} RAM · ${formatMb(site.diskLimitMb)} disk`
+                            : badge.label}
                         </span>
                       </div>
                       <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -207,19 +235,27 @@ export function SitesDashboard() {
                           <div className="mb-1 flex justify-between text-xs">
                             <span>RAM (soft)</span>
                             <span>
-                              {formatMb(site.ramUsedMb)} / {formatMb(site.ramLimitMb)}
+                              {formatMb(site.ramUsedMb)}
+                              {hasLimits ? ` / ${formatMb(site.ramLimitMb)}` : ""}
                             </span>
                           </div>
-                          <ProgressBar value={ramPct} tone={ramPct >= 90 ? "warn" : "accent"} />
+                          <ProgressBar
+                            value={hasLimits ? ramPct : Math.min(100, site.ramUsedMb > 0 ? 35 : 0)}
+                            tone={hasLimits && ramPct >= 90 ? "warn" : "accent"}
+                          />
                         </div>
                         <div>
                           <div className="mb-1 flex justify-between text-xs">
                             <span>Disk</span>
                             <span>
-                              {formatMb(site.diskUsedMb)} / {formatMb(site.diskLimitMb)}
+                              {formatMb(site.diskUsedMb)}
+                              {hasLimits ? ` / ${formatMb(site.diskLimitMb)}` : ""}
                             </span>
                           </div>
-                          <ProgressBar value={diskPct} tone={diskPct >= 90 ? "warn" : "accent"} />
+                          <ProgressBar
+                            value={hasLimits ? diskPct : Math.min(100, site.diskUsedMb > 0 ? 35 : 0)}
+                            tone={hasLimits && diskPct >= 90 ? "warn" : "accent"}
+                          />
                         </div>
                       </div>
                     </li>

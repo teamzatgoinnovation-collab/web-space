@@ -360,7 +360,8 @@ export function SpaceWizard() {
           </div>
         </div>
         <p className="mt-3 max-w-xl text-base text-[var(--space-ink)]/70">
-          Create your ERPNext site on a zatgo.online subdomain — pick apps, choose a plan, and go.
+          Create an ERPNext site on the shared Docker bench as a zatgo.online subdomain — pick
+          apps from the bench, choose a plan, and go.
         </p>
       </header>
 
@@ -427,7 +428,9 @@ export function SpaceWizard() {
               <section>
                 <h2 className="text-xl font-semibold">Apps & Administrator</h2>
                 <p className="mt-1 text-sm text-[var(--space-ink)]/60">
-                  Username is fixed as <strong>Administrator</strong>.
+                  Apps listed from the Docker bench (<code className="text-xs">get-app</code> /{" "}
+                  <code className="text-xs">apps/</code>). Username is fixed as{" "}
+                  <strong>Administrator</strong>.
                 </p>
                 <div className="mt-6 grid gap-2 sm:grid-cols-2">
                   {(catalog?.apps || []).map((app) => {
@@ -477,10 +480,10 @@ export function SpaceWizard() {
               <section>
                 <h2 className="text-xl font-semibold">Billing plan</h2>
                 <p className="mt-1 text-sm text-[var(--space-ink)]/60">
-                  Mock billing for MVP — no charge. Soft quotas from a shared server pool
+                  Soft quotas on the shared Docker bench — mock billing, no charge
                   {catalog?.pool
-                    ? ` (${formatMb(catalog.pool.ramPoolMb)} RAM).`
-                    : " (10 GB RAM)."}
+                    ? ` (${formatMb(catalog.pool.ramPoolMb)} RAM pool).`
+                    : " (10 GB RAM pool)."}
                 </p>
                 {catalog?.pool && (
                   <p className="mt-2 text-xs text-[var(--space-ink)]/50">
