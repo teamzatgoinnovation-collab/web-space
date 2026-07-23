@@ -1,8 +1,9 @@
 import {
   benchEnv,
   domainSuffix,
-  getBackendMemMb,
+  getBackendMemStats,
   getSiteDiskMb,
+  listInstalledAppsOnSite,
   listSites,
 } from "./bench";
 import {
@@ -24,13 +25,27 @@ export type SiteUsageRow = {
   deskUrl: string;
   ramLimitMb: number;
   diskLimitMb: number;
+  /** Soft share of live container RSS (sites share one Docker process). */
   ramUsedMb: number;
+  /** Live `du -sm sites/<hostname>` from Docker. */
   diskUsedMb: number;
+  /** Live `bench list-apps` on this site. */
+  apps: string[];
   usageUpdatedAt: string | null;
-  /** space = Space Order; erp = erp.zatgo.online; unmanaged = on bench without order */
   kind: SiteKind;
-  /** Counts toward soft Space pool (Space Orders only). */
   inPool: boolean;
+  onDocker: boolean;
+};
+
+export type MeasuredBench = {
+  /** Live docker stats used MB */
+  ramUsedMb: number;
+  /** Live docker stats limit MB */
+  ramLimitMb: number;
+  /** Sum of live site directory sizes */
+  diskUsedMb: number;
+  siteCount: number;
+  containerMemRaw?: string;
 };
 
 export type { PoolSummary };
@@ -38,6 +53,8 @@ export type { PoolSummary };
 export type SitesUsagePayload = {
   ok: boolean;
   pool: PoolSummary;
+  /** Live Docker measurements (not soft-quota bookkeeping). */
+  measured: MeasuredBench;
   sites: SiteUsageRow[];
   metricsSource?: "live" | "snapshot" | "mixed";
   error?: string;
@@ -45,16 +62,11 @@ export type SitesUsagePayload = {
   source?: "docker";
 };
 
-/** Plan-weighted soft RAM share of measured backend container RSS. */
-export function attributeRam(
-  totalMemMb: number,
-  sites: { ramLimitMb: number; inPool?: boolean }[],
-): number[] {
-  if (sites.length === 0) return [];
-  // Weight by plan limit when present; otherwise equal share weight of 1024
-  const weights = sites.map((s) => Math.max(1, s.ramLimitMb || 1024));
-  const weightSum = weights.reduce((a, b) => a + b, 0);
-  return weights.map((w) => Math.round((totalMemMb * w) / weightSum));
+/** Equal soft RAM share of measured backend container RSS across listed sites. */
+export function attributeRamEqual(totalMemMb: number, siteCount: number): number[] {
+  if (siteCount <= 0) return [];
+  const each = Math.round(totalMemMb / siteCount);
+  return Array.from({ length: siteCount }, () => each);
 }
 
 function erpHostname(): string {
@@ -80,57 +92,72 @@ function buildMergedRows(
 ): SiteUsageRow[] {
   const suffix = domainSuffix();
   const erp = erpHostname();
+  const onDocker = new Set(benchHostnames.filter((h) => isDomainSite(h, suffix)));
   const byHost = new Map<string, SiteUsageRow>();
 
-  for (const order of orderRows) {
-    byHost.set(order.hostname, {
-      ...order,
-      kind: "space",
-      inPool: true,
-    });
-  }
-
-  for (const hostname of benchHostnames) {
-    if (!isDomainSite(hostname, suffix)) continue;
-    const existing = byHost.get(hostname);
+  // Prefer Docker as source of truth for which sites exist
+  for (const hostname of onDocker) {
     if (hostname === erp) {
       byHost.set(hostname, {
-        name: existing?.name || "bench:erp",
+        name: "bench:erp",
         slug: "erp",
         hostname,
-        status: "Bench",
+        status: "Active",
         plan: "",
         planTitle: "Bench / ERP",
         deskUrl: `https://${hostname}`,
         ramLimitMb: 0,
         diskLimitMb: 0,
-        ramUsedMb: existing?.ramUsedMb || 0,
-        diskUsedMb: existing?.diskUsedMb || 0,
-        usageUpdatedAt: existing?.usageUpdatedAt || null,
+        ramUsedMb: 0,
+        diskUsedMb: 0,
+        apps: [],
+        usageUpdatedAt: null,
         kind: "erp",
         inPool: false,
+        onDocker: true,
       });
       continue;
     }
-    if (existing) {
-      // keep Space order metadata; site exists on Docker
-      continue;
+    const order = orderRows.find((o) => o.hostname === hostname);
+    if (order) {
+      byHost.set(hostname, {
+        ...order,
+        apps: [],
+        kind: "space",
+        inPool: true,
+        onDocker: true,
+      });
+    } else {
+      byHost.set(hostname, {
+        name: `bench:${hostname}`,
+        slug: slugFromHostname(hostname, suffix),
+        hostname,
+        status: "Active",
+        plan: "",
+        planTitle: "On Docker",
+        deskUrl: `https://${hostname}`,
+        ramLimitMb: 0,
+        diskLimitMb: 0,
+        ramUsedMb: 0,
+        diskUsedMb: 0,
+        apps: [],
+        usageUpdatedAt: null,
+        kind: "unmanaged",
+        inPool: false,
+        onDocker: true,
+      });
     }
-    byHost.set(hostname, {
-      name: `bench:${hostname}`,
-      slug: slugFromHostname(hostname, suffix),
-      hostname,
-      status: "Unmanaged",
-      plan: "",
-      planTitle: "Unmanaged",
-      deskUrl: `https://${hostname}`,
-      ramLimitMb: 0,
-      diskLimitMb: 0,
-      ramUsedMb: 0,
-      diskUsedMb: 0,
-      usageUpdatedAt: null,
-      kind: "unmanaged",
-      inPool: false,
+  }
+
+  // Provisioning Space Orders not on disk yet
+  for (const order of orderRows) {
+    if (byHost.has(order.hostname)) continue;
+    byHost.set(order.hostname, {
+      ...order,
+      apps: [],
+      kind: "space",
+      inPool: true,
+      onDocker: false,
     });
   }
 
@@ -164,19 +191,18 @@ export async function collectSitesUsage(opts?: {
 
   let sites = buildMergedRows(benchHostnames, snapshot.sites);
 
-  // Fallback: orders only if Docker list failed entirely
-  if (sites.length === 0 && snapshot.sites.length > 0) {
-    sites = snapshot.sites.map((s) => ({ ...s, kind: "space" as const, inPool: true }));
-  }
+  const emptyMeasured: MeasuredBench = {
+    ramUsedMb: 0,
+    ramLimitMb: 0,
+    diskUsedMb: 0,
+    siteCount: sites.filter((s) => s.onDocker).length,
+  };
 
-  if (!refresh || sites.length === 0) {
+  if (!refresh) {
     return {
       ok: true,
-      pool: {
-        ...poolBase,
-        usedRamMb: snapshot.pool.usedRamMb,
-        usedDiskMb: snapshot.pool.usedDiskMb,
-      },
+      pool: poolBase,
+      measured: emptyMeasured,
       sites,
       metricsSource: "snapshot",
       controlPlane: "space-web",
@@ -185,19 +211,61 @@ export async function collectSitesUsage(opts?: {
     };
   }
 
-  const [backendMem, diskSizes] = await Promise.all([
-    getBackendMemMb(env),
-    Promise.all(sites.map((s) => getSiteDiskMb(env, s.hostname))),
+  if (sites.length === 0) {
+    const mem = await getBackendMemStats(env);
+    return {
+      ok: !listError,
+      pool: poolBase,
+      measured: {
+        ramUsedMb: mem.usedMb,
+        ramLimitMb: mem.limitMb,
+        diskUsedMb: 0,
+        siteCount: 0,
+        containerMemRaw: mem.raw,
+      },
+      sites: [],
+      metricsSource: "live",
+      controlPlane: "space-web",
+      source: "docker",
+      error: listError,
+    };
+  }
+
+  const dockerSites = sites.filter((s) => s.onDocker);
+  const [mem, diskSizes, appsLists] = await Promise.all([
+    getBackendMemStats(env),
+    Promise.all(sites.map((s) => (s.onDocker ? getSiteDiskMb(env, s.hostname) : Promise.resolve(0)))),
+    Promise.all(
+      sites.map((s) => (s.onDocker ? listInstalledAppsOnSite(env, s.hostname) : Promise.resolve([]))),
+    ),
   ]);
 
-  const ramShares = attributeRam(backendMem, sites);
+  const ramShares = attributeRamEqual(mem.usedMb, Math.max(1, dockerSites.length));
+  let dockerIdx = 0;
   const now = new Date().toISOString();
-  const enriched: SiteUsageRow[] = sites.map((site, i) => ({
-    ...site,
-    ramUsedMb: ramShares[i] ?? site.ramUsedMb ?? 0,
-    diskUsedMb: diskSizes[i] ?? site.diskUsedMb ?? 0,
-    usageUpdatedAt: now,
-  }));
+
+  const enriched: SiteUsageRow[] = sites.map((site, i) => {
+    const diskUsedMb = diskSizes[i] ?? 0;
+    const apps = appsLists[i] ?? [];
+    let ramUsedMb = 0;
+    if (site.onDocker) {
+      ramUsedMb = ramShares[dockerIdx] ?? 0;
+      dockerIdx += 1;
+    }
+    return {
+      ...site,
+      ramUsedMb,
+      diskUsedMb,
+      apps,
+      usageUpdatedAt: now,
+      // Prefer live status when site exists on Docker
+      status: site.onDocker
+        ? site.kind === "space"
+          ? site.status || "Active"
+          : "Active"
+        : site.status,
+    };
+  });
 
   for (const s of enriched) {
     if (s.kind === "space" && !s.name.startsWith("bench:")) {
@@ -209,16 +277,27 @@ export async function collectSitesUsage(opts?: {
     }
   }
 
-  // Pool "used" = Space Orders only (erp/unmanaged excluded from pool accounting)
-  const usedRamMb = enriched.filter((s) => s.inPool).reduce((sum, s) => sum + s.ramUsedMb, 0);
-  const usedDiskMb = enriched.filter((s) => s.inPool).reduce((sum, s) => sum + s.diskUsedMb, 0);
+  const measuredDisk = enriched
+    .filter((s) => s.onDocker)
+    .reduce((sum, s) => sum + s.diskUsedMb, 0);
+
+  // Soft pool "used" for Space Orders only (bookkeeping)
+  const poolUsedRam = enriched.filter((s) => s.inPool).reduce((sum, s) => sum + s.ramUsedMb, 0);
+  const poolUsedDisk = enriched.filter((s) => s.inPool).reduce((sum, s) => sum + s.diskUsedMb, 0);
 
   return {
     ok: true,
     pool: {
       ...poolBase,
-      usedRamMb,
-      usedDiskMb,
+      usedRamMb: poolUsedRam,
+      usedDiskMb: poolUsedDisk,
+    },
+    measured: {
+      ramUsedMb: mem.usedMb,
+      ramLimitMb: mem.limitMb,
+      diskUsedMb: measuredDisk,
+      siteCount: dockerSites.length,
+      containerMemRaw: mem.raw,
     },
     sites: enriched,
     metricsSource: "live",

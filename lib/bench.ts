@@ -391,6 +391,18 @@ export async function getSiteDiskMb(env: BenchEnv, site: string): Promise<number
  * Sites share one bench — callers attribute this across Active sites.
  */
 export async function getBackendMemMb(env: BenchEnv): Promise<number> {
+  const stats = await getBackendMemStats(env);
+  return stats.usedMb;
+}
+
+export type BackendMemStats = {
+  usedMb: number;
+  limitMb: number;
+  raw: string;
+};
+
+/** Live container memory used / limit from `docker stats`. */
+export async function getBackendMemStats(env: BenchEnv): Promise<BackendMemStats> {
   const container =
     env === "local"
       ? process.env.LOCAL_BACKEND_CONTAINER?.trim() || "erpnext-backend-1"
@@ -404,10 +416,38 @@ export async function getBackendMemMb(env: BenchEnv): Promise<number> {
     ["docker", "stats", "--no-stream", "--format", "{{.MemUsage}}", container],
     { timeoutMs: 30_000 },
   );
-  if (!result.ok) return 0;
-  // e.g. "1.234GiB / 7.765GiB" or "512MiB / 7.765GiB"
-  const used = result.stdout.trim().split("/")[0]?.trim() || "";
-  return parseDockerMemToMb(used);
+  if (!result.ok) {
+    return { usedMb: 0, limitMb: 0, raw: result.stderr || "" };
+  }
+  const raw = result.stdout.trim();
+  const [usedPart, limitPart] = raw.split("/").map((s) => s.trim());
+  return {
+    usedMb: parseDockerMemToMb(usedPart || ""),
+    limitMb: parseDockerMemToMb(limitPart || ""),
+    raw,
+  };
+}
+
+/** Parse `bench list-apps` stdout into package names (current installs on a site). */
+export function parseListAppsOutput(stdout: string): string[] {
+  const apps: string[] = [];
+  for (const line of stdout.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || /^app\s+version/i.test(trimmed) || /^-+$/.test(trimmed)) continue;
+    // Formats: "frappe  15.x.x" | "frappe" | "frappe\t15"
+    const pkg = trimmed.split(/\s+/)[0];
+    if (pkg && PACKAGE_NAME_RE.test(pkg)) apps.push(pkg);
+  }
+  return [...new Set(apps)];
+}
+
+export async function listInstalledAppsOnSite(
+  env: BenchEnv,
+  site: string,
+): Promise<string[]> {
+  const result = await listAppsOnSite(env, site);
+  if (!result.ok) return [];
+  return parseListAppsOutput(result.stdout);
 }
 
 export function parseDockerMemToMb(raw: string): number {
