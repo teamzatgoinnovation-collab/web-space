@@ -162,32 +162,65 @@ export function SitesDashboard() {
   const [sites, setSites] = useState<SiteUsageRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [detailsLoading, setDetailsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const showDevConsole = isDevConsoleEnabled();
 
-  const load = useCallback(async (opts?: { soft?: boolean }) => {
-    if (opts?.soft) setRefreshing(true);
-    else setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/sites?refresh=1", { cache: "no-store" });
-      const data = await res.json();
-      if (!data.ok && (!data.sites || data.sites.length === 0)) {
-        throw new Error(data.error || "Could not load your sites. Try again.");
-      }
-      setPool(data.pool);
-      setMeasured(data.measured || null);
-      setSites(data.sites || []);
-      if (data.error) {
-        setError("Some site details could not be refreshed. Try again in a moment.");
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not load your sites.");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+  const applyPayload = useCallback((data: {
+    pool?: PoolSummary;
+    measured?: MeasuredBench | null;
+    sites?: SiteUsageRow[];
+    error?: string;
+    ok?: boolean;
+  }) => {
+    if (data.pool) setPool(data.pool);
+    if (data.measured) setMeasured(data.measured);
+    if (Array.isArray(data.sites)) setSites(data.sites);
+    if (data.error) {
+      setError("Some site details could not be refreshed. Try again in a moment.");
     }
   }, []);
+
+  const load = useCallback(
+    async (opts?: { soft?: boolean }) => {
+      const soft = Boolean(opts?.soft);
+      if (soft) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+      setError(null);
+
+      try {
+        // Fast path: site names only (usually a few seconds)
+        const quick = await fetch("/api/sites?refresh=0", { cache: "no-store" });
+        const quickData = await quick.json();
+        if (!quickData.ok && (!quickData.sites || quickData.sites.length === 0)) {
+          throw new Error(quickData.error || "Could not load your sites. Try again.");
+        }
+        applyPayload(quickData);
+        setLoading(false);
+
+        // Slow path: memory, storage, apps (can take a while)
+        setDetailsLoading(true);
+        setRefreshing(true);
+        const full = await fetch("/api/sites?refresh=1", { cache: "no-store" });
+        const fullData = await full.json();
+        if (fullData.ok || (fullData.sites && fullData.sites.length > 0)) {
+          applyPayload(fullData);
+        } else if (!soft) {
+          setError("Could not update storage and apps. Site list is still shown.");
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not load your sites.");
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+        setDetailsLoading(false);
+      }
+    },
+    [applyPayload],
+  );
 
   useEffect(() => {
     void load();
@@ -196,6 +229,8 @@ export function SitesDashboard() {
   const readyCount = sites.filter((s) => s.onDocker).length;
   const memPct =
     measured && measured.ramLimitMb > 0 ? pct(measured.ramUsedMb, measured.ramLimitMb) : 0;
+  const showSkeleton = loading && sites.length === 0;
+  const busy = loading || refreshing || detailsLoading;
 
   return (
     <div className="mx-auto flex min-h-screen max-w-4xl flex-col px-4 py-10 sm:px-6">
@@ -209,29 +244,29 @@ export function SitesDashboard() {
             See each site’s address, storage, and apps. Open a site to sign in to Desk.
           </p>
         </div>
-          <div className="flex shrink-0 flex-col items-end gap-2">
-            <div className="flex flex-wrap gap-2">
-              <Link
-                href="/"
-                className="rounded-xl border border-[var(--space-ink)]/15 bg-white/70 px-4 py-2 text-sm font-medium hover:bg-white"
-              >
-                New site
-              </Link>
-              <button
-                type="button"
-                disabled={loading || refreshing}
-                onClick={() => void load({ soft: true })}
-                className="rounded-xl bg-[var(--space-accent)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-              >
-                {refreshing ? "Updating…" : "Refresh"}
-              </button>
-            </div>
-            {showDevConsole && (
-              <span className="rounded-lg border border-[var(--space-ink)]/15 bg-white/60 px-3 py-1.5 text-xs font-medium text-[var(--space-ink)]/50">
-                Dev logs: bottom-right
-              </span>
-            )}
+        <div className="flex shrink-0 flex-col items-end gap-2">
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/"
+              className="rounded-xl border border-[var(--space-ink)]/15 bg-white/70 px-4 py-2 text-sm font-medium hover:bg-white"
+            >
+              New site
+            </Link>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void load({ soft: true })}
+              className="rounded-xl bg-[var(--space-accent)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+            >
+              {busy && !showSkeleton ? "Updating…" : "Refresh"}
+            </button>
           </div>
+          {showDevConsole && (
+            <span className="rounded-lg border border-[var(--space-ink)]/15 bg-white/60 px-3 py-1.5 text-xs font-medium text-[var(--space-ink)]/50">
+              Dev logs: bottom-right
+            </span>
+          )}
+        </div>
       </header>
 
       {error && (
@@ -240,12 +275,17 @@ export function SitesDashboard() {
         </div>
       )}
 
-      {loading && !measured ? (
+      {showSkeleton ? (
         <SitesSkeleton />
       ) : (
         <>
+          {detailsLoading && (
+            <p className="mb-4 text-sm text-[var(--space-ink)]/55">
+              Updating storage and apps…
+            </p>
+          )}
           <div
-            className={`grid gap-4 sm:grid-cols-3 ${refreshing ? "opacity-70 transition-opacity" : ""}`}
+            className={`grid gap-4 sm:grid-cols-3 ${detailsLoading ? "opacity-70 transition-opacity" : ""}`}
           >
             <SummaryCard
               title="Sites"
@@ -284,11 +324,11 @@ export function SitesDashboard() {
             </p>
           )}
 
-          <section className={`mt-10 ${refreshing ? "opacity-70 transition-opacity" : ""}`}>
+          <section className={`mt-10 ${detailsLoading ? "opacity-80 transition-opacity" : ""}`}>
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-lg font-semibold">All sites</h2>
-              {refreshing ? (
-                <span className="text-xs text-[var(--space-ink)]/45">Updating…</span>
+              {detailsLoading ? (
+                <span className="text-xs text-[var(--space-ink)]/45">Updating details…</span>
               ) : null}
             </div>
             {sites.length === 0 ? (
@@ -333,7 +373,13 @@ export function SitesDashboard() {
                         </span>
                       </div>
 
-                      {apps.length > 0 && (
+                      {detailsLoading && (site.apps || []).length === 0 ? (
+                        <div className="mt-3 flex flex-wrap gap-1.5" aria-hidden>
+                          <SkeletonBlock className="h-5 w-14" />
+                          <SkeletonBlock className="h-5 w-16" />
+                          <SkeletonBlock className="h-5 w-12" />
+                        </div>
+                      ) : apps.length > 0 ? (
                         <div className="mt-3">
                           <p className="mb-1.5 text-xs font-medium text-[var(--space-ink)]/50">
                             Apps
@@ -349,14 +395,18 @@ export function SitesDashboard() {
                             ))}
                           </div>
                         </div>
-                      )}
+                      ) : null}
 
                       <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                         <p className="text-sm text-[var(--space-ink)]/70">
                           Storage used:{" "}
-                          <span className="font-medium tabular-nums text-[var(--space-ink)]">
-                            {formatMb(site.diskUsedMb)}
-                          </span>
+                          {detailsLoading && !site.diskUsedMb ? (
+                            <SkeletonBlock className="inline-block h-4 w-16 align-middle" />
+                          ) : (
+                            <span className="font-medium tabular-nums text-[var(--space-ink)]">
+                              {formatMb(site.diskUsedMb)}
+                            </span>
+                          )}
                           {hasPlanLimits ? (
                             <span className="text-[var(--space-ink)]/45">
                               {" "}
@@ -382,7 +432,7 @@ export function SitesDashboard() {
         </>
       )}
 
-      {showDevConsole && <SitesDevConsole active={loading || refreshing} />}
+      {showDevConsole && <SitesDevConsole active={busy} />}
     </div>
   );
 }
