@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { rateLimitOk } from "@/lib/bench";
-import { checkInvite, startProvisionJob } from "@/lib/provision";
+import { startProvisionJob } from "@/lib/provision";
 
 export const runtime = "nodejs";
 
@@ -11,7 +11,6 @@ const Body = z.object({
   apps: z.array(z.string()).default(["frappe", "erpnext"]),
   plan: z.string().min(1),
   paymentMethod: z.enum(["Mock", "Stripe", "PayPal"]).optional(),
-  inviteCode: z.string().optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -38,18 +37,12 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const inviteErr = checkInvite(parsed.data.inviteCode);
-  if (inviteErr) {
-    return NextResponse.json({ ok: false, error: inviteErr }, { status: 403 });
-  }
-
   const jobId = startProvisionJob({
     slug: parsed.data.slug,
     adminPassword: parsed.data.adminPassword,
     apps: parsed.data.apps,
     plan: parsed.data.plan,
     paymentMethod: parsed.data.paymentMethod || "Mock",
-    inviteCode: parsed.data.inviteCode,
   });
 
   return NextResponse.json({ ok: true, jobId });

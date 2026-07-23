@@ -9,7 +9,7 @@
 ```bash
 pnpm install
 cp Clients/web/space-web/.env.example Clients/web/space-web/.env.local
-# edit DO_SSH_*, DO_DB_ROOT_PASSWORD, SPACE_INVITE_CODE, FRAPPE_*
+# edit DO_SSH_*, DO_DB_ROOT_PASSWORD, FRAPPE_*
 pnpm --filter @zatgo/space-web dev
 ```
 

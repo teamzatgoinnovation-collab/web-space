@@ -26,7 +26,6 @@ export type ProvisionPayload = {
   apps: string[];
   plan: string;
   paymentMethod?: string;
-  inviteCode?: string;
   orderName?: string;
 };
 
@@ -63,15 +62,7 @@ export function getLocalCatalog() {
     domainSuffix: domainSuffix(),
     apps: DEFAULT_APPS,
     plans: MOCK_PLANS,
-    inviteRequired: Boolean(process.env.SPACE_INVITE_CODE?.trim()),
   };
-}
-
-export function checkInvite(code?: string): string | null {
-  const expected = process.env.SPACE_INVITE_CODE?.trim();
-  if (!expected) return null;
-  if ((code || "") !== expected) return "Valid invite code required";
-  return null;
 }
 
 async function notifyControlSite(body: Record<string, unknown>) {
@@ -112,7 +103,6 @@ export async function createControlOrder(payload: ProvisionPayload): Promise<str
         plan: payload.plan,
         apps: payload.apps,
         payment_method: payload.paymentMethod || "Mock",
-        invite_code: payload.inviteCode,
       }),
     });
     const json = (await res.json()) as {
@@ -151,9 +141,6 @@ export function toUserError(raw: string): string {
   }
   if (lower.includes("rate limit")) {
     return "Too many attempts. Please wait a while and try again.";
-  }
-  if (lower.includes("invite")) {
-    return "A valid invite code is required to create a site.";
   }
   if (lower.includes("install-app") || lower.includes("new-site")) {
     return "We could not finish installing your site. Please try again, or contact support if it keeps failing.";

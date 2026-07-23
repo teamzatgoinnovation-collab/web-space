@@ -7,7 +7,6 @@ type Catalog = {
   domainSuffix: string;
   apps: { package: string; title: string; required?: boolean }[];
   plans: { code: string; title: string; mock_price: string; features: string[] }[];
-  inviteRequired: boolean;
 };
 
 type JobView = {
@@ -111,7 +110,6 @@ export function SpaceWizard() {
   const [selectedApps, setSelectedApps] = useState<string[]>(["frappe", "erpnext"]);
   const [plan, setPlan] = useState("basic");
   const [payment, setPayment] = useState<"Mock" | "Stripe" | "PayPal">("Mock");
-  const [inviteCode, setInviteCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
@@ -261,7 +259,6 @@ export function SpaceWizard() {
           apps: selectedApps,
           plan,
           paymentMethod: payment,
-          inviteCode: inviteCode || undefined,
         }),
       });
       const data = await res.json();
@@ -273,7 +270,7 @@ export function SpaceWizard() {
     } finally {
       setBusy(false);
     }
-  }, [slug, password, selectedApps, plan, payment, inviteCode]);
+  }, [slug, password, selectedApps, plan, payment]);
 
   const retryInstall = () => {
     setError(null);
@@ -356,16 +353,6 @@ export function SpaceWizard() {
                       Site name: <strong className="font-medium">{hostname}</strong>
                     </li>
                   </ul>
-                )}
-                {catalog?.inviteRequired && (
-                  <div className="mt-6">
-                    <label className="block text-sm font-medium">Invite code</label>
-                    <input
-                      className="mt-2 w-full rounded-xl border border-[var(--space-ink)]/15 bg-white px-3 py-2 outline-none"
-                      value={inviteCode}
-                      onChange={(e) => setInviteCode(e.target.value)}
-                    />
-                  </div>
                 )}
               </section>
             )}
