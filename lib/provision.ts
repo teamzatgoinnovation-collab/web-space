@@ -2,6 +2,7 @@ import {
   appendLog,
   createJob,
   finishStage,
+  getJob,
   setJobResult,
   setJobStatus,
   startStage,
@@ -10,9 +11,11 @@ import {
   benchEnv,
   clearCache,
   domainSuffix,
+  getDoSshConfig,
   installApp,
   listAppsOnSite,
   listBenchApps,
+  listSites,
   newSite,
   redactSecrets,
   RESERVED_SLUGS,
@@ -98,14 +101,29 @@ export function toUserError(raw: string): string {
   if (lower.includes("already exists") || lower.includes("hostname_taken") || lower.includes("taken")) {
     return "A site with this name already exists. Please choose another subdomain.";
   }
-  if (lower.includes("dns") || lower.includes("resolve") || lower.includes("namecheap")) {
-    return "Your subdomain is not reachable yet. Wait a few minutes for DNS, then try again.";
+  // DNS / subdomain reachability (before SSH)
+  if (
+    lower.includes("resolves to") ||
+    lower.includes("dns lookup failed") ||
+    lower.includes("namecheap") ||
+    (lower.includes("dns") && !lower.includes("banner exchange"))
+  ) {
+    return "Your subdomain is not ready yet. Wait a few minutes for DNS, then try again.";
+  }
+  // SSH / droplet unreachable (provisioning cannot run)
+  if (
+    lower.includes("banner exchange") ||
+    lower.includes("connecttimeout") ||
+    lower.includes("connection timed out") ||
+    lower.includes("connection to ") && lower.includes("port 22") ||
+    lower.includes("could not reach the droplet") ||
+    lower.includes("ssh:") ||
+    lower.includes("permission denied (publickey)")
+  ) {
+    return "The install server is temporarily unreachable. Please try again in a few minutes.";
   }
   if (lower.includes("do_db_root") || lower.includes("mariadb") || lower.includes("db root")) {
     return "The server is not fully configured for new sites. Contact ZatGo support.";
-  }
-  if (lower.includes("ssh") || lower.includes("not found") || lower.includes("connection")) {
-    return "Could not reach the server. Check your connection and try again.";
   }
   if (lower.includes("rate limit")) {
     return "Too many attempts. Please wait a while and try again.";
@@ -170,6 +188,24 @@ export function startProvisionJob(payload: ProvisionPayload): string {
       if (!dns.ok) throw new Error(dns.message);
       finishStage(jobId, "dns", "succeeded");
 
+      // Fail fast if droplet SSH is down (ping alone is not enough)
+      if (env === "cloud") {
+        const cfg = getDoSshConfig();
+        if ("error" in cfg) throw new Error(cfg.error);
+        appendLog(jobId, "Checking install server connection…");
+        const probe = await listSites(env);
+        if (!probe.result.ok) {
+          const detail = probe.result.stderr || probe.result.stdout || "SSH probe failed";
+          appendLog(jobId, detail);
+          throw new Error(
+            /timed out|banner exchange|connection refused/i.test(detail)
+              ? `Could not reach the droplet over SSH: ${detail.slice(0, 200)}`
+              : detail,
+          );
+        }
+        appendLog(jobId, `Install server reachable · ${probe.sites.length} sites`);
+      }
+
       const apps = [...new Set(payload.apps.filter(Boolean))];
       if (!apps.includes("frappe")) apps.unshift("frappe");
       const installErpnext = apps.includes("erpnext");
@@ -183,7 +219,13 @@ export function startProvisionJob(payload: ProvisionPayload): string {
         installErpnext,
       });
       appendLog(jobId, redactSecrets(created.stdout || created.stderr || ""));
-      if (!created.ok) throw new Error(created.stderr || "new-site failed");
+      if (!created.ok) {
+        const detail = created.stderr || created.stdout || "new-site failed";
+        if (/timed out|banner exchange|connection to .* port 22/i.test(detail)) {
+          throw new Error(`Could not reach the droplet over SSH: ${detail.slice(0, 200)}`);
+        }
+        throw new Error(detail);
+      }
       finishStage(jobId, "new-site", "succeeded");
 
       startStage(jobId, "apps", "Install apps");
@@ -223,16 +265,25 @@ export function startProvisionJob(payload: ProvisionPayload): string {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       appendLog(jobId, `ERROR: ${message}`);
-      setJobStatus(jobId, "failed", toUserError(message));
-      const running = job.stages.find((s) => s.status === "running");
-      if (running) finishStage(jobId, running.id, "failed");
+      const userMsg = toUserError(message);
+      setJobStatus(jobId, "failed", userMsg);
+      const current = getJob(jobId);
+      const running = current?.stages.find((s) => s.status === "running");
+      if (running) {
+        finishStage(jobId, running.id, "failed");
+      }
+      // Ensure no stage stays "running" after failure
+      const after = getJob(jobId);
+      for (const s of after?.stages || []) {
+        if (s.status === "running") finishStage(jobId, s.id, "failed");
+      }
       await notifyOrder(orderName, {
         status: "Failed",
         jobId,
-        errorMessage: toUserError(message),
+        errorMessage: userMsg,
         stage: running?.id || "failed",
         stage_status: "failed",
-        message: toUserError(message),
+        message: userMsg,
       });
     }
   })();

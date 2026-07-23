@@ -112,6 +112,16 @@ function resolveStageStatus(
   jobId?: string | null,
 ): string {
   const live = job?.stages.find((s) => s.id === stepId);
+  if (job?.status === "failed") {
+    if (live?.status === "running") return "failed";
+    if (live?.status === "failed") return "failed";
+    if (live?.status === "succeeded" || live?.status === "skipped") return live.status;
+    const failedIdx = INSTALL_STEPS.findIndex(
+      (s) => job.stages.find((x) => x.id === s.id)?.status === "failed",
+    );
+    if (failedIdx >= 0 && stepIndex > failedIdx) return "pending";
+    if (failedIdx >= 0 && stepIndex < failedIdx) return "succeeded";
+  }
   if (live?.status) return live.status;
   if (job?.status === "succeeded") return "succeeded";
   if (job?.status === "failed" && stepIndex === 0 && (!job.stages || job.stages.length === 0)) {
