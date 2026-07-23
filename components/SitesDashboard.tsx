@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { SitesDevConsole } from "@/components/SitesDevConsole";
 import { formatMb, pct } from "@/lib/format";
+import { isDevConsoleEnabled } from "@/lib/dev-console";
 import type { MeasuredBench, PoolSummary, SiteUsageRow } from "@/lib/sites-usage";
 
 const APP_LABELS: Record<string, string> = {
@@ -161,6 +163,7 @@ export function SitesDashboard() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const showDevConsole = isDevConsoleEnabled();
 
   const load = useCallback(async (opts?: { soft?: boolean }) => {
     if (opts?.soft) setRefreshing(true);
@@ -206,22 +209,29 @@ export function SitesDashboard() {
             See each site’s address, storage, and apps. Open a site to sign in to Desk.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Link
-            href="/"
-            className="rounded-xl border border-[var(--space-ink)]/15 bg-white/70 px-4 py-2 text-sm font-medium hover:bg-white"
-          >
-            New site
-          </Link>
-          <button
-            type="button"
-            disabled={loading || refreshing}
-            onClick={() => void load({ soft: true })}
-            className="rounded-xl bg-[var(--space-accent)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-          >
-            {refreshing ? "Updating…" : "Refresh"}
-          </button>
-        </div>
+          <div className="flex shrink-0 flex-col items-end gap-2">
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href="/"
+                className="rounded-xl border border-[var(--space-ink)]/15 bg-white/70 px-4 py-2 text-sm font-medium hover:bg-white"
+              >
+                New site
+              </Link>
+              <button
+                type="button"
+                disabled={loading || refreshing}
+                onClick={() => void load({ soft: true })}
+                className="rounded-xl bg-[var(--space-accent)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+              >
+                {refreshing ? "Updating…" : "Refresh"}
+              </button>
+            </div>
+            {showDevConsole && (
+              <span className="rounded-lg border border-[var(--space-ink)]/15 bg-white/60 px-3 py-1.5 text-xs font-medium text-[var(--space-ink)]/50">
+                Dev logs: bottom-right
+              </span>
+            )}
+          </div>
       </header>
 
       {error && (
@@ -371,6 +381,8 @@ export function SitesDashboard() {
           </section>
         </>
       )}
+
+      {showDevConsole && <SitesDevConsole active={loading || refreshing} />}
     </div>
   );
 }

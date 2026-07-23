@@ -12,6 +12,8 @@ import {
   updateOrder,
   type PoolSummary,
 } from "./control-plane";
+import { sitesLog } from "./sites-activity";
+import { isDevConsoleEnabled } from "./dev-console";
 
 export type SiteKind = "space" | "erp" | "unmanaged";
 
@@ -176,20 +178,39 @@ export async function collectSitesUsage(opts?: {
   const env = benchEnv();
   const poolBase = allocatedPool();
   const snapshot = listSitesUsageSnapshot();
+  const t0 = Date.now();
+  const log = isDevConsoleEnabled();
+
+  if (log) {
+    sitesLog(`── sites refresh start (env=${env}, refresh=${refresh}) ──`);
+  }
 
   let benchHostnames: string[] = [];
   let listError: string | undefined;
   try {
+    if (log) sitesLog("listing site directories…");
     const listed = await listSites(env);
     if (!listed.result.ok && listed.sites.length === 0) {
       listError = listed.result.stderr || "Could not list Docker sites";
+      if (log) sitesLog(`list sites FAILED: ${listError}`);
+    } else {
+      benchHostnames = listed.sites;
+      if (log) {
+        sitesLog(`list sites ok · ${benchHostnames.length} entries`);
+        for (const h of benchHostnames) sitesLog(`  dir ${h}`);
+      }
     }
-    benchHostnames = listed.sites;
   } catch (err) {
     listError = err instanceof Error ? err.message : String(err);
+    if (log) sitesLog(`list sites error: ${listError}`);
   }
 
   let sites = buildMergedRows(benchHostnames, snapshot.sites);
+  if (log) {
+    sitesLog(
+      `merged ${sites.length} rows · orders=${snapshot.sites.length} · poolAllocatedRam=${poolBase.allocatedRamMb}MB`,
+    );
+  }
 
   const emptyMeasured: MeasuredBench = {
     ramUsedMb: 0,
@@ -199,6 +220,7 @@ export async function collectSitesUsage(opts?: {
   };
 
   if (!refresh) {
+    if (log) sitesLog(`snapshot only · ${Date.now() - t0}ms`);
     return {
       ok: true,
       pool: poolBase,
@@ -212,7 +234,9 @@ export async function collectSitesUsage(opts?: {
   }
 
   if (sites.length === 0) {
+    if (log) sitesLog("no sites — sampling container memory only…");
     const mem = await getBackendMemStats(env);
+    if (log) sitesLog(`memory ${mem.raw || `${mem.usedMb}/${mem.limitMb} MB`} · ${Date.now() - t0}ms`);
     return {
       ok: !listError,
       pool: poolBase,
@@ -232,13 +256,32 @@ export async function collectSitesUsage(opts?: {
   }
 
   const dockerSites = sites.filter((s) => s.onDocker);
-  const [mem, diskSizes, appsLists] = await Promise.all([
-    getBackendMemStats(env),
-    Promise.all(sites.map((s) => (s.onDocker ? getSiteDiskMb(env, s.hostname) : Promise.resolve(0)))),
-    Promise.all(
-      sites.map((s) => (s.onDocker ? listInstalledAppsOnSite(env, s.hostname) : Promise.resolve([]))),
-    ),
-  ]);
+  if (log) sitesLog(`sampling memory, disk, apps for ${dockerSites.length} live sites…`);
+
+  const mem = await getBackendMemStats(env);
+  if (log) sitesLog(`container memory: ${mem.raw || `${mem.usedMb} / ${mem.limitMb} MB`}`);
+
+  const diskSizes = await Promise.all(
+    sites.map(async (s) => {
+      if (!s.onDocker) return 0;
+      const mb = await getSiteDiskMb(env, s.hostname);
+      if (log) sitesLog(`${s.hostname} disk=${mb} MB`);
+      return mb;
+    }),
+  );
+
+  const appsLists = await Promise.all(
+    sites.map(async (s) => {
+      if (!s.onDocker) return [] as string[];
+      const apps = await listInstalledAppsOnSite(env, s.hostname);
+      if (log) {
+        sitesLog(
+          `${s.hostname} apps=${apps.length ? apps.join(",") : "(none)"}`,
+        );
+      }
+      return apps;
+    }),
+  );
 
   const ramShares = attributeRamEqual(mem.usedMb, Math.max(1, dockerSites.length));
   let dockerIdx = 0;
@@ -258,7 +301,6 @@ export async function collectSitesUsage(opts?: {
       diskUsedMb,
       apps,
       usageUpdatedAt: now,
-      // Prefer live status when site exists on Docker
       status: site.onDocker
         ? site.kind === "space"
           ? site.status || "Active"
@@ -281,9 +323,14 @@ export async function collectSitesUsage(opts?: {
     .filter((s) => s.onDocker)
     .reduce((sum, s) => sum + s.diskUsedMb, 0);
 
-  // Soft pool "used" for Space Orders only (bookkeeping)
   const poolUsedRam = enriched.filter((s) => s.inPool).reduce((sum, s) => sum + s.ramUsedMb, 0);
   const poolUsedDisk = enriched.filter((s) => s.inPool).reduce((sum, s) => sum + s.diskUsedMb, 0);
+
+  if (log) {
+    sitesLog(
+      `done · sites=${enriched.length} diskTotal=${measuredDisk}MB mem=${mem.usedMb}MB · ${Date.now() - t0}ms`,
+    );
+  }
 
   return {
     ok: true,
