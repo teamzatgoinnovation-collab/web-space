@@ -116,7 +116,7 @@ const APP_TITLE_OVERRIDES: Record<string, string> = {
 /** Platform / ops apps — not offered in the customer wizard. */
 const CATALOG_HIDDEN_APPS = new Set(["zatgo_space"]);
 
-function titleForApp(pkg: string): string {
+export function titleForApp(pkg: string): string {
   return (
     APP_TITLE_OVERRIDES[pkg] ||
     pkg.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
@@ -352,6 +352,8 @@ export function updateOrder(
       | "diskUsedMb"
       | "usageUpdatedAt"
       | "deskUrl"
+      | "plan"
+      | "apps"
     >
   >,
 ): SpaceOrder | null {
@@ -368,6 +370,89 @@ export function updateOrder(
 
 export function getOrder(name: string): SpaceOrder | undefined {
   return readStore().orders.find((o) => o.name === name);
+}
+
+export function getOrderByHostname(hostname: string): SpaceOrder | undefined {
+  const active = readStore().orders.filter(
+    (o) =>
+      o.hostname === hostname &&
+      (o.status === "Draft" || o.status === "Provisioning" || o.status === "Active"),
+  );
+  return active.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
+}
+
+/**
+ * Upgrade or assign a plan for a hostname.
+ * Pool check uses delta for upgrades (new − old).
+ */
+export function setHostnamePlan(
+  hostname: string,
+  planCode: string,
+): { ok: true; order: SpaceOrder } | { ok: false; code: string; message: string } {
+  const plan = getPlan(planCode);
+  if (!plan) {
+    return { ok: false, code: "INVALID_PLAN", message: `Unknown plan: ${planCode}` };
+  }
+
+  const existing = getOrderByHostname(hostname);
+  const oldRam = existing ? planQuotas(existing.plan).ramLimitMb : 0;
+  const oldDisk = existing ? planQuotas(existing.plan).diskLimitMb : 0;
+  const pool = allocatedPool(existing?.name);
+  const needRam = pool.allocatedRamMb + plan.ramLimitMb;
+  const needDisk = pool.allocatedDiskMb + plan.diskLimitMb;
+  // allocatedPool(exclude) already excludes existing; add new plan sizes
+  if (needRam > pool.ramPoolMb) {
+    return {
+      ok: false,
+      code: "POOL_RAM_EXCEEDED",
+      message: `Not enough memory capacity for this plan (${formatFree(pool.freeRamMb + oldRam)} available after change).`,
+    };
+  }
+  if (needDisk > pool.diskPoolMb) {
+    return {
+      ok: false,
+      code: "POOL_DISK_EXCEEDED",
+      message: `Not enough storage capacity for this plan.`,
+    };
+  }
+
+  if (existing) {
+    const updated = updateOrder(existing.name, { plan: plan.code, status: "Active" });
+    if (!updated) {
+      return { ok: false, code: "UPDATE_FAILED", message: "Could not update plan" };
+    }
+    return { ok: true, order: updated };
+  }
+
+  const suffix = domainSuffix();
+  const slug = hostname.endsWith(`.${suffix}`)
+    ? hostname.slice(0, -(suffix.length + 1))
+    : hostname.split(".")[0] || hostname;
+  const now = new Date().toISOString();
+  const order: SpaceOrder = {
+    name: nextOrderName(),
+    slug,
+    hostname,
+    status: "Active",
+    plan: plan.code,
+    paymentMethod: "Mock",
+    apps: [{ package: "frappe", title: titleForApp("frappe") }],
+    deskUrl: `https://${hostname}`,
+    ramUsedMb: 0,
+    diskUsedMb: 0,
+    usageUpdatedAt: null,
+    createdAt: now,
+    updatedAt: now,
+  };
+  mutate((s) => {
+    s.orders.push(order);
+  });
+  return { ok: true, order };
+}
+
+function formatFree(mb: number): string {
+  if (mb >= 1024) return `${Math.round((mb / 1024) * 10) / 10} GB`;
+  return `${Math.round(mb)} MB`;
 }
 
 export function listActiveSites(): SpaceOrder[] {

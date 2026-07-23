@@ -250,7 +250,8 @@ export function SitesDashboard() {
             Your sites
           </h1>
           <p className="mt-3 max-w-xl text-base text-[var(--space-ink)]/70">
-            See each site’s address, storage, and apps. Open a site to sign in to Desk.
+            See each site’s address, storage, and apps. Manage apps and plans, or open Desk to
+            sign in.
           </p>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-2">
@@ -423,14 +424,22 @@ export function SitesDashboard() {
                             </span>
                           ) : null}
                         </p>
-                        <a
-                          href={site.deskUrl || `https://${site.hostname}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="rounded-lg bg-[var(--space-accent)] px-3 py-1.5 text-xs font-medium text-white"
-                        >
-                          Open Desk
-                        </a>
+                        <div className="flex flex-wrap gap-2">
+                          <Link
+                            href={`/sites/${encodeURIComponent(site.slug)}`}
+                            className="rounded-lg border border-[var(--space-ink)]/15 bg-white px-3 py-1.5 text-xs font-medium text-[var(--space-ink)] hover:bg-white"
+                          >
+                            Manage
+                          </Link>
+                          <a
+                            href={site.deskUrl || `https://${site.hostname}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="rounded-lg bg-[var(--space-accent)] px-3 py-1.5 text-xs font-medium text-white"
+                          >
+                            Open Desk
+                          </a>
+                        </div>
                       </div>
                     </li>
                   );

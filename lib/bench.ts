@@ -344,8 +344,18 @@ export async function installApp(env: BenchEnv, site: string, pkg: string): Prom
   );
 }
 
+export async function uninstallApp(env: BenchEnv, site: string, pkg: string): Promise<RunResult> {
+  return runOnBench(
+    env,
+    ["bench", "--site", assertSiteName(site), "uninstall-app", assertPackageName(pkg), "--yes"],
+    { timeoutMs: 30 * 60_000 },
+  );
+}
+
 export async function clearCache(env: BenchEnv, site: string): Promise<RunResult> {
-  return runOnBench(env, ["bench", "--site", assertSiteName(site), "clear-cache"]);
+  return runOnBench(env, ["bench", "--site", assertSiteName(site), "clear-cache"], {
+    timeoutMs: 120_000,
+  });
 }
 
 export async function listAppsOnSite(env: BenchEnv, site: string): Promise<RunResult> {
