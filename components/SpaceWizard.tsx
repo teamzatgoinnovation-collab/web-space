@@ -22,12 +22,51 @@ const STEPS = ["Site", "Apps", "Plan", "Install"] as const;
 
 /** Friendly install checklist — labels only, no ops/workflow secrets. */
 const INSTALL_STEPS = [
-  { id: "validate", label: "Checking your site name" },
-  { id: "dns", label: "Connecting your subdomain" },
-  { id: "new-site", label: "Creating your ERPNext site" },
-  { id: "apps", label: "Installing selected apps" },
-  { id: "cache", label: "Finishing setup" },
+  { id: "validate", label: "Checking your site name", level: 20 },
+  { id: "dns", label: "Connecting your subdomain", level: 40 },
+  { id: "new-site", label: "Creating your ERPNext site", level: 60 },
+  { id: "apps", label: "Installing selected apps", level: 80 },
+  { id: "cache", label: "Finishing setup", level: 100 },
 ] as const;
+
+function stageStatus(
+  stepDef: (typeof INSTALL_STEPS)[number],
+  job: JobView | null,
+): string {
+  const live = job?.stages.find((s) => s.id === stepDef.id);
+  let status = live?.status || "pending";
+  if (!live && job?.status === "succeeded") status = "succeeded";
+  if (!live && job?.status === "running" && job.stages.some((s) => s.status === "running")) {
+    const runningIdx = INSTALL_STEPS.findIndex(
+      (s) => job.stages.find((x) => x.id === s.id)?.status === "running",
+    );
+    const thisIdx = INSTALL_STEPS.findIndex((s) => s.id === stepDef.id);
+    if (thisIdx < runningIdx) status = "succeeded";
+  }
+  return status;
+}
+
+/** Overall install percent: completed steps at their level; running step halfway to next. */
+function installProgress(job: JobView | null): number {
+  if (!job) return 0;
+  if (job.status === "succeeded") return 100;
+  let percent = 0;
+  for (let i = 0; i < INSTALL_STEPS.length; i++) {
+    const stepDef = INSTALL_STEPS[i];
+    const status = stageStatus(stepDef, job);
+    const prevLevel = i === 0 ? 0 : INSTALL_STEPS[i - 1].level;
+    if (status === "succeeded" || status === "skipped") {
+      percent = stepDef.level;
+    } else if (status === "running" || status === "failed") {
+      percent = Math.round((prevLevel + stepDef.level) / 2);
+      break;
+    } else {
+      break;
+    }
+  }
+  if (job.status === "queued") return 5;
+  return percent;
+}
 
 function StageIcon({ status }: { status: string }) {
   if (status === "succeeded" || status === "skipped") {
@@ -191,6 +230,8 @@ export function SpaceWizard() {
     if (!failed) return null;
     return INSTALL_STEPS.find((s) => s.id === failed.id)?.label || failed.label;
   }, [job]);
+
+  const progressPercent = useMemo(() => installProgress(job), [job]);
 
   return (
     <div className="mx-auto flex min-h-screen max-w-3xl flex-col px-4 py-10 sm:px-6">
@@ -398,6 +439,43 @@ export function SpaceWizard() {
                 )}
                 {(jobId || job) && (
                   <div className="mt-6 space-y-4">
+                    <div>
+                      <div className="mb-2 flex items-baseline justify-between gap-3">
+                        <span className="text-sm font-medium text-[var(--space-ink)]">
+                          {job?.status === "succeeded"
+                            ? "Complete"
+                            : job?.status === "failed"
+                              ? "Stopped"
+                              : "Progress"}
+                        </span>
+                        <span
+                          className={`text-2xl font-semibold tabular-nums ${
+                            job?.status === "failed"
+                              ? "text-red-700"
+                              : "text-[var(--space-accent)]"
+                          }`}
+                          aria-live="polite"
+                        >
+                          {progressPercent}%
+                        </span>
+                      </div>
+                      <div
+                        className="h-2.5 overflow-hidden rounded-full bg-[var(--space-ink)]/10"
+                        role="progressbar"
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-valuenow={progressPercent}
+                      >
+                        <div
+                          className={`h-full rounded-full transition-[width] duration-500 ease-out ${
+                            job?.status === "failed"
+                              ? "bg-red-600"
+                              : "bg-[var(--space-accent)]"
+                          }`}
+                          style={{ width: `${progressPercent}%` }}
+                        />
+                      </div>
+                    </div>
                     {(!job || job.status === "queued" || job.status === "running") && (
                       <p className="rounded-xl bg-[var(--space-accent-soft)] px-4 py-3 text-sm text-[var(--space-ink)]">
                         Still installing — this can take several minutes. Keep this page open.
@@ -405,30 +483,17 @@ export function SpaceWizard() {
                     )}
                     {job?.status === "succeeded" && (
                       <p className="rounded-xl bg-[var(--space-accent-soft)] px-4 py-3 text-sm font-medium text-[var(--space-accent)]">
-                        Your site is ready.
+                        Your site is ready (100%).
                       </p>
                     )}
                     <ol className="space-y-3">
                       {INSTALL_STEPS.map((stepDef) => {
-                        const live = job?.stages.find((s) => s.id === stepDef.id);
-                        let status = live?.status || "pending";
-                        if (!live && job?.status === "succeeded") status = "succeeded";
-                        if (
-                          !live &&
-                          job?.status === "running" &&
-                          job.stages.some((s) => s.status === "running")
-                        ) {
-                          const runningIdx = INSTALL_STEPS.findIndex(
-                            (s) => job.stages.find((x) => x.id === s.id)?.status === "running",
-                          );
-                          const thisIdx = INSTALL_STEPS.findIndex((s) => s.id === stepDef.id);
-                          if (thisIdx < runningIdx) status = "succeeded";
-                        }
+                        const status = stageStatus(stepDef, job);
                         return (
                           <li key={stepDef.id} className="flex items-center gap-3 text-sm">
                             <StageIcon status={status} />
                             <span
-                              className={
+                              className={`min-w-0 flex-1 ${
                                 status === "succeeded"
                                   ? "font-medium text-[var(--space-ink)]"
                                   : status === "running"
@@ -436,10 +501,21 @@ export function SpaceWizard() {
                                     : status === "failed"
                                       ? "font-medium text-red-700"
                                       : "text-[var(--space-ink)]/50"
-                              }
+                              }`}
                             >
                               {stepDef.label}
                               {status === "failed" ? " — failed" : ""}
+                            </span>
+                            <span
+                              className={`shrink-0 tabular-nums text-xs ${
+                                status === "succeeded" || status === "running"
+                                  ? "font-medium text-[var(--space-ink)]/70"
+                                  : status === "failed"
+                                    ? "font-medium text-red-700"
+                                    : "text-[var(--space-ink)]/35"
+                              }`}
+                            >
+                              {stepDef.level}%
                             </span>
                           </li>
                         );
