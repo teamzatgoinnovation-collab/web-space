@@ -1,25 +1,21 @@
 import { NextResponse } from "next/server";
-import { getLocalCatalog } from "@/lib/provision";
+import { buildCatalog } from "@/lib/control-plane";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+/** Catalog from space-web control plane + live Docker bench apps. */
 export async function GET() {
-  const base = process.env.FRAPPE_BASE_URL?.replace(/\/$/, "");
-  if (base) {
-    try {
-      const res = await fetch(`${base}/api/method/zatgo_space.api.v1.space.list_catalog`, {
-        cache: "no-store",
-      });
-      const json = (await res.json()) as {
-        message?: { success?: boolean; data?: Record<string, unknown> };
-      };
-      if (json.message?.success && json.message.data) {
-        return NextResponse.json({ ok: true, ...json.message.data });
-      }
-    } catch {
-      // fall through to live bench listing
-    }
+  try {
+    const catalog = await buildCatalog();
+    return NextResponse.json(catalog);
+  } catch (err) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: err instanceof Error ? err.message : "Failed to load catalog",
+      },
+      { status: 500 },
+    );
   }
-  return NextResponse.json(await getLocalCatalog());
 }
