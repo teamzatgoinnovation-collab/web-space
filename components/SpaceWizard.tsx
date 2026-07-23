@@ -14,12 +14,65 @@ type JobView = {
   id: string;
   status: string;
   stages: { id: string; label: string; status: string }[];
-  log: string[];
   error?: string;
   result?: { deskUrl?: string; hostname?: string };
 };
 
 const STEPS = ["Site", "Apps", "Plan", "Install"] as const;
+
+/** Friendly install checklist — labels only, no ops/workflow secrets. */
+const INSTALL_STEPS = [
+  { id: "validate", label: "Checking your site name" },
+  { id: "dns", label: "Connecting your subdomain" },
+  { id: "new-site", label: "Creating your ERPNext site" },
+  { id: "apps", label: "Installing selected apps" },
+  { id: "cache", label: "Finishing setup" },
+] as const;
+
+function StageIcon({ status }: { status: string }) {
+  if (status === "succeeded" || status === "skipped") {
+    return (
+      <span
+        className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--space-accent)] text-white"
+        aria-label="Done"
+      >
+        <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" aria-hidden>
+          <path
+            d="M4.5 10.5 8 14l7.5-8"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </span>
+    );
+  }
+  if (status === "running") {
+    return (
+      <span
+        className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-[var(--space-accent)] border-t-transparent animate-spin"
+        aria-label="In progress"
+      />
+    );
+  }
+  if (status === "failed") {
+    return (
+      <span
+        className="flex h-8 w-8 items-center justify-center rounded-full bg-red-600 text-white text-sm font-bold"
+        aria-label="Failed"
+      >
+        !
+      </span>
+    );
+  }
+  return (
+    <span
+      className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-[var(--space-ink)]/20"
+      aria-label="Waiting"
+    />
+  );
+}
 
 export function SpaceWizard() {
   const [catalog, setCatalog] = useState<Catalog | null>(null);
@@ -313,7 +366,9 @@ export function SpaceWizard() {
               <section>
                 <h2 className="text-xl font-semibold">Installing</h2>
                 <p className="mt-1 text-sm text-[var(--space-ink)]/60">
-                  {hostname || "Your site"} — DNS → new-site → apps → ready
+                  {hostname
+                    ? `Setting up ${hostname}`
+                    : "We will set up your site and open ERPNext when ready."}
                 </p>
                 {!jobId && (
                   <button
@@ -325,23 +380,46 @@ export function SpaceWizard() {
                     {busy ? "Starting…" : "Start installation"}
                   </button>
                 )}
-                {job && (
+                {(jobId || job) && (
                   <div className="mt-6 space-y-4">
-                    <ol className="space-y-2">
-                      {job.stages.map((s) => (
-                        <li
-                          key={s.id}
-                          className="flex items-center justify-between rounded-lg bg-[var(--space-mist)]/80 px-3 py-2 text-sm"
-                        >
-                          <span>{s.label}</span>
-                          <span className="font-medium capitalize opacity-70">{s.status}</span>
-                        </li>
-                      ))}
+                    <ol className="space-y-3">
+                      {INSTALL_STEPS.map((stepDef) => {
+                        const live = job?.stages.find((s) => s.id === stepDef.id);
+                        let status = live?.status || "pending";
+                        if (!live && job?.status === "failed") status = "pending";
+                        if (!live && job?.status === "succeeded") status = "succeeded";
+                        if (
+                          !live &&
+                          job?.status === "running" &&
+                          job.stages.some((s) => s.status === "running")
+                        ) {
+                          const runningIdx = INSTALL_STEPS.findIndex(
+                            (s) => job.stages.find((x) => x.id === s.id)?.status === "running",
+                          );
+                          const thisIdx = INSTALL_STEPS.findIndex((s) => s.id === stepDef.id);
+                          if (thisIdx < runningIdx) status = "succeeded";
+                        }
+                        return (
+                          <li key={stepDef.id} className="flex items-center gap-3 text-sm">
+                            <StageIcon status={status} />
+                            <span
+                              className={
+                                status === "succeeded"
+                                  ? "font-medium text-[var(--space-ink)]"
+                                  : status === "running"
+                                    ? "font-medium text-[var(--space-accent)]"
+                                    : status === "failed"
+                                      ? "font-medium text-red-700"
+                                      : "text-[var(--space-ink)]/50"
+                              }
+                            >
+                              {stepDef.label}
+                            </span>
+                          </li>
+                        );
+                      })}
                     </ol>
-                    <pre className="max-h-48 overflow-auto rounded-lg bg-[var(--space-ink)] p-3 text-xs text-[var(--space-mist)]">
-                      {(job.log || []).slice(-40).join("\n") || "Waiting for logs…"}
-                    </pre>
-                    {job.status === "succeeded" && job.result?.deskUrl && (
+                    {job?.status === "succeeded" && job.result?.deskUrl && (
                       <a
                         href={job.result.deskUrl}
                         className="inline-flex rounded-xl bg-[var(--space-accent)] px-5 py-3 text-sm font-medium text-white"
@@ -349,8 +427,10 @@ export function SpaceWizard() {
                         Open ERPNext login
                       </a>
                     )}
-                    {job.status === "failed" && (
-                      <p className="text-sm text-red-700">{job.error || "Installation failed"}</p>
+                    {job?.status === "failed" && (
+                      <p className="text-sm text-red-700">
+                        {job.error || "Installation failed. Try again or contact support."}
+                      </p>
                     )}
                   </div>
                 )}

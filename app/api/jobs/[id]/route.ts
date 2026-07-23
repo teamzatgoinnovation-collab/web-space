@@ -18,7 +18,6 @@ export async function GET(
       id: job.id,
       status: job.status,
       stages: job.stages,
-      log: job.log,
       error: job.error,
       result: job.result,
     },
