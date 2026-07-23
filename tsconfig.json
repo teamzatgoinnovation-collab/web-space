@@ -1,11 +1,14 @@
 {
-  "extends": "@zatgo/config/tsconfig.next.json",
+  "extends": "@zatgo/config/tsconfig/next.json",
   "compilerOptions": {
     "plugins": [{ "name": "next" }],
     "paths": {
       "@/*": ["./*"]
     },
-    "strict": true
+    "allowJs": true,
+    "incremental": true,
+    "jsx": "preserve",
+    "noEmit": true
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
   "exclude": ["node_modules"]
