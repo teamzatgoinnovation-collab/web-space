@@ -56,10 +56,18 @@ const MOCK_PLANS = [
   },
 ];
 
-const DEFAULT_APPS = [
+const APP_TITLE_OVERRIDES: Record<string, string> = {
+  frappe: "Frappe Framework",
+  erpnext: "ERPNext",
+  hrms: "HRMS",
+  zatgo_core: "ZatGo Core",
+  zatgo_space: "ZatGo Space",
+  chat_ai: "Chat AI",
+};
+
+/** Last-resort if SSH/bench listing fails. */
+const FALLBACK_APPS = [
   { package: "frappe", title: "Frappe Framework", required: true },
-  { package: "erpnext", title: "ERPNext", required: false },
-  { package: "hrms", title: "HRMS", required: false },
 ];
 
 const DEFAULT_POOL = {
@@ -72,11 +80,37 @@ const DEFAULT_POOL = {
   siteCount: 0,
 };
 
-export function getLocalCatalog() {
+function titleForApp(pkg: string): string {
+  return APP_TITLE_OVERRIDES[pkg] || pkg.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+export async function getLocalCatalog() {
+  const { listBenchApps, benchEnv } = await import("./bench");
+  let packages: string[] = [];
+  try {
+    packages = await listBenchApps(benchEnv());
+  } catch {
+    packages = [];
+  }
+
+  const priority: Record<string, number> = { frappe: 0, erpnext: 1 };
+  const sorted = [...new Set(packages)].sort(
+    (a, b) => (priority[a] ?? 50) - (priority[b] ?? 50) || a.localeCompare(b),
+  );
+
+  const apps =
+    sorted.length > 0
+      ? sorted.map((pkg) => ({
+          package: pkg,
+          title: titleForApp(pkg),
+          required: pkg === "frappe",
+        }))
+      : FALLBACK_APPS;
+
   return {
     ok: true,
     domainSuffix: domainSuffix(),
-    apps: DEFAULT_APPS,
+    apps,
     plans: MOCK_PLANS,
     pool: DEFAULT_POOL,
   };
