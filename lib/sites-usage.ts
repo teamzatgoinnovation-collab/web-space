@@ -192,17 +192,22 @@ export async function collectSitesUsage(opts?: {
     const listed = await listSites(env);
     if (!listed.result.ok && listed.sites.length === 0) {
       listError = listed.result.stderr || "Could not list Docker sites";
-      if (log) sitesLog(`list sites FAILED: ${listError}`);
+      if (log) {
+        sitesLog(`list sites FAILED (${Date.now() - t0}ms): ${listError.slice(0, 240)}`);
+        if (/timed out|timeout|Connection timed out|Connection refused/i.test(listError)) {
+          sitesLog("hint: SSH to droplet unreachable — check network / DO_SSH_HOST");
+        }
+      }
     } else {
       benchHostnames = listed.sites;
       if (log) {
-        sitesLog(`list sites ok · ${benchHostnames.length} entries`);
+        sitesLog(`list sites ok · ${benchHostnames.length} entries · ${Date.now() - t0}ms`);
         for (const h of benchHostnames) sitesLog(`  dir ${h}`);
       }
     }
   } catch (err) {
     listError = err instanceof Error ? err.message : String(err);
-    if (log) sitesLog(`list sites error: ${listError}`);
+    if (log) sitesLog(`list sites error (${Date.now() - t0}ms): ${listError}`);
   }
 
   let sites = buildMergedRows(benchHostnames, snapshot.sites);
@@ -222,7 +227,7 @@ export async function collectSitesUsage(opts?: {
   if (!refresh) {
     if (log) sitesLog(`snapshot only · ${Date.now() - t0}ms`);
     return {
-      ok: true,
+      ok: !(listError && sites.length === 0),
       pool: poolBase,
       measured: emptyMeasured,
       sites,

@@ -207,6 +207,12 @@ function sshBaseArgs(cfg: DoSshConfig): string[] {
     "BatchMode=yes",
     "-o",
     "StrictHostKeyChecking=accept-new",
+    "-o",
+    "ConnectTimeout=12",
+    "-o",
+    "ServerAliveInterval=5",
+    "-o",
+    "ServerAliveCountMax=2",
     "-p",
     String(cfg.port),
     `${cfg.user}@${cfg.host}`,
@@ -255,7 +261,7 @@ export function getDbRootPassword(env: BenchEnv): string | undefined {
 }
 
 export async function listSites(env: BenchEnv): Promise<{ sites: string[]; result: RunResult }> {
-  const result = await runOnBench(env, ["ls", "-1", "sites"]);
+  const result = await runOnBench(env, ["ls", "-1", "sites"], { timeoutMs: 25_000 });
   if (!result.ok) return { sites: [], result };
   const noise = new Set([
     "apps",
@@ -379,7 +385,7 @@ export async function runOnHost(
 /** Soft disk usage of a site directory in MB (`du -sm`). */
 export async function getSiteDiskMb(env: BenchEnv, site: string): Promise<number> {
   const safe = assertSiteName(site);
-  const result = await runOnBench(env, ["du", "-sm", `sites/${safe}`], { timeoutMs: 60_000 });
+  const result = await runOnBench(env, ["du", "-sm", `sites/${safe}`], { timeoutMs: 20_000 });
   if (!result.ok) return 0;
   const first = result.stdout.trim().split(/\s+/)[0];
   const mb = Number.parseInt(first || "0", 10);
@@ -414,7 +420,7 @@ export async function getBackendMemStats(env: BenchEnv): Promise<BackendMemStats
   const result = await runOnHost(
     env,
     ["docker", "stats", "--no-stream", "--format", "{{.MemUsage}}", container],
-    { timeoutMs: 30_000 },
+    { timeoutMs: 20_000 },
   );
   if (!result.ok) {
     return { usedMb: 0, limitMb: 0, raw: result.stderr || "" };

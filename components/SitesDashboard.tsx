@@ -196,10 +196,19 @@ export function SitesDashboard() {
         const quick = await fetch("/api/sites?refresh=0", { cache: "no-store" });
         const quickData = await quick.json();
         if (!quickData.ok && (!quickData.sites || quickData.sites.length === 0)) {
-          throw new Error(quickData.error || "Could not load your sites. Try again.");
+          const msg =
+            /timed out|timeout|unreachable|Connection/i.test(String(quickData.error || ""))
+              ? "Could not reach the server to list sites. Check your connection and try again."
+              : quickData.error || "Could not load your sites. Try again.";
+          throw new Error(msg);
         }
         applyPayload(quickData);
         setLoading(false);
+
+        if (!quickData.sites?.length && quickData.error) {
+          setError("Could not reach the server to list sites. Try Refresh in a moment.");
+          return;
+        }
 
         // Slow path: memory, storage, apps (can take a while)
         setDetailsLoading(true);
