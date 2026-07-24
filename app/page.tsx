@@ -1,5 +1,5 @@
-import { SpaceWizard } from "@/components/SpaceWizard";
+import { SitesDashboard } from "@/components/SitesDashboard";
 
 export default function HomePage() {
-  return <SpaceWizard />;
+  return <SitesDashboard />;
 }

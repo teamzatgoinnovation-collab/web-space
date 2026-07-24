@@ -257,7 +257,7 @@ export function SitesDashboard() {
         <div className="flex shrink-0 flex-col items-end gap-2">
           <div className="flex flex-wrap gap-2">
             <Link
-              href="/"
+              href="/new"
               className="rounded-xl border border-[var(--space-ink)]/15 bg-white/70 px-4 py-2 text-sm font-medium hover:bg-white"
             >
               New site
@@ -345,7 +345,7 @@ export function SitesDashboard() {
               <div className="mt-4 rounded-2xl border border-dashed border-[var(--space-ink)]/20 bg-white/40 px-6 py-10 text-center">
                 <p className="text-sm text-[var(--space-ink)]/65">You don’t have any sites yet.</p>
                 <Link
-                  href="/"
+                  href="/new"
                   className="mt-4 inline-block text-sm font-medium text-[var(--space-accent)] underline-offset-2 hover:underline"
                 >
                   Create your first site

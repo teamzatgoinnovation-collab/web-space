@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "ZatGo Space",
-  description: "Create your ERPNext site on zatgo.online",
+  description: "Manage your ERPNext sites on zatgo.online",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

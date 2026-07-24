@@ -1,5 +1,6 @@
-import { SitesDashboard } from "@/components/SitesDashboard";
+import { redirect } from "next/navigation";
 
-export default function SitesPage() {
-  return <SitesDashboard />;
+/** Sites list lives at `/` — keep `/sites` as an alias. */
+export default function SitesAliasPage() {
+  redirect("/");
 }

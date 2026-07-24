@@ -102,7 +102,7 @@ export function SiteManage({ slug }: Props) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
         <p className="text-sm text-red-800">{error || "Site not found"}</p>
-        <Link href="/sites" className="mt-4 inline-block text-sm text-[var(--space-accent)]">
+        <Link href="/" className="mt-4 inline-block text-sm text-[var(--space-accent)]">
           ← Back to sites
         </Link>
       </div>
@@ -116,7 +116,7 @@ export function SiteManage({ slug }: Props) {
     <div className="mx-auto flex min-h-screen max-w-3xl flex-col px-4 py-10 sm:px-6">
       <header className="mb-8">
         <Link
-          href="/sites"
+          href="/"
           className="text-sm font-medium text-[var(--space-accent)] hover:underline"
         >
           ← All sites

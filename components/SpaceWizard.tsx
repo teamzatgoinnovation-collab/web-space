@@ -357,7 +357,7 @@ export function SpaceWizard() {
           </div>
           <div className="flex shrink-0 flex-col items-end gap-2">
             <Link
-              href="/sites"
+              href="/"
               className="rounded-lg border border-[var(--space-ink)]/15 bg-white/60 px-3 py-1.5 text-xs font-medium text-[var(--space-ink)]/70 hover:bg-white"
             >
               Your sites
