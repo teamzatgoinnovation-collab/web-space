@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { DevActivityConsole } from "@/components/DevActivityConsole";
+import { FreeCheckout, type CheckoutSuccess } from "@/components/FreeCheckout";
 import { isDevConsoleEnabled } from "@/lib/dev-console";
 import { formatMb } from "@/lib/format";
 import Link from "next/link";
@@ -14,6 +15,8 @@ type Catalog = {
     code: string;
     title: string;
     mock_price: string;
+    priceCents?: number;
+    dueTodayCents?: number;
     features: string[];
     ramLimitMb?: number;
     diskLimitMb?: number;
@@ -27,6 +30,7 @@ type Catalog = {
     freeDiskMb: number;
     siteCount: number;
   };
+  billing?: { mode?: string; message?: string };
 };
 
 type JobView = {
@@ -37,7 +41,7 @@ type JobView = {
   result?: { deskUrl?: string; hostname?: string };
 };
 
-const STEPS = ["Site", "Apps", "Plan", "Install"] as const;
+const STEPS = ["Site", "Apps", "Plan", "Pay", "Install"] as const;
 
 /** Friendly install checklist — labels only, no ops/workflow secrets. */
 const INSTALL_STEPS = [
@@ -148,7 +152,8 @@ export function SpaceWizard() {
   const [confirm, setConfirm] = useState("");
   const [selectedApps, setSelectedApps] = useState<string[]>(["frappe", "erpnext"]);
   const [plan, setPlan] = useState("basic");
-  const [payment, setPayment] = useState<"Mock" | "Stripe" | "PayPal">("Mock");
+  const [checkoutSessionId, setCheckoutSessionId] = useState<string | null>(null);
+  const [paidCard, setPaidCard] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
@@ -292,7 +297,7 @@ export function SpaceWizard() {
         return;
       }
     }
-    setStep((s) => Math.min(s + 1, 3));
+    setStep((s) => Math.min(s + 1, 4));
   };
 
   const back = () => {
@@ -300,7 +305,7 @@ export function SpaceWizard() {
     setStep((s) => Math.max(s - 1, 0));
   };
 
-  const startInstall = useCallback(async () => {
+  const startInstall = useCallback(async (sessionId: string) => {
     setBusy(true);
     setError(null);
     setJob(null);
@@ -317,25 +322,40 @@ export function SpaceWizard() {
           adminPassword: password,
           apps: selectedApps,
           plan,
-          paymentMethod: payment,
+          checkoutSessionId: sessionId,
+          paymentMethod: "Stripe",
         }),
       });
       const data = await res.json();
       if (!data.ok) throw new Error(data.error || "Could not start installation");
       setJobId(data.jobId);
-      setStep(3);
+      setStep(4);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
     }
-  }, [slug, password, selectedApps, plan, payment]);
+  }, [slug, password, selectedApps, plan]);
+
+  const onCheckoutSuccess = (result: CheckoutSuccess) => {
+    setCheckoutSessionId(result.sessionId);
+    setPaidCard(
+      result.cardLast4
+        ? `${result.cardBrand || "card"} •••• ${result.cardLast4}`
+        : "Paid $0.00",
+    );
+    void startInstall(result.sessionId);
+  };
 
   const retryInstall = () => {
     setError(null);
     setJob(null);
     setJobId(null);
-    void startInstall();
+    if (checkoutSessionId) {
+      void startInstall(checkoutSessionId);
+    } else {
+      setStep(3);
+    }
   };
 
   const failedStepLabel = useMemo(() => {
@@ -489,8 +509,8 @@ export function SpaceWizard() {
               <section>
                 <h2 className="text-xl font-semibold">Billing plan</h2>
                 <p className="mt-1 text-sm text-[var(--space-ink)]/60">
-                  Choose how much memory and storage your site includes. Billing is mock for now —
-                  no charge.
+                  Choose capacity for your site. Checkout uses a Stripe-style card form — Space is
+                  free, so you pay $0.00.
                 </p>
                 {catalog?.pool && (
                   <p className="mt-2 text-xs text-[var(--space-ink)]/50">
@@ -507,12 +527,17 @@ export function SpaceWizard() {
                     const fitsDisk =
                       !catalog?.pool || catalog.pool.freeDiskMb >= disk;
                     const fits = fitsRam && fitsDisk;
+                    const listCents = p.priceCents ?? 0;
                     return (
                       <button
                         key={p.code}
                         type="button"
                         disabled={!fits}
-                        onClick={() => setPlan(p.code)}
+                        onClick={() => {
+                          setPlan(p.code);
+                          setCheckoutSessionId(null);
+                          setPaidCard(null);
+                        }}
                         className={`rounded-xl border px-4 py-4 text-left transition ${
                           plan === p.code
                             ? "border-[var(--space-accent)] bg-[var(--space-accent-soft)]"
@@ -521,7 +546,22 @@ export function SpaceWizard() {
                       >
                         <div className="flex items-baseline justify-between gap-3">
                           <span className="font-semibold">{p.title}</span>
-                          <span className="text-sm opacity-70">{p.mock_price}</span>
+                          <span className="text-right text-sm">
+                            {listCents > 0 ? (
+                              <>
+                                <span className="text-[var(--space-ink)]/40 line-through">
+                                  {p.mock_price}
+                                </span>
+                                <span className="ml-2 font-semibold text-[var(--space-accent)]">
+                                  Free
+                                </span>
+                              </>
+                            ) : (
+                              <span className="font-semibold text-[var(--space-accent)]">
+                                Free
+                              </span>
+                            )}
+                          </span>
                         </div>
                         {(ram > 0 || disk > 0) && (
                           <p className="mt-1.5 text-sm font-medium text-[var(--space-accent)]">
@@ -542,32 +582,37 @@ export function SpaceWizard() {
                     );
                   })}
                 </div>
-                <div className="mt-6">
-                  <p className="text-sm font-medium">Payment method</p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {(["Mock", "Stripe", "PayPal"] as const).map((m) => (
-                      <button
-                        key={m}
-                        type="button"
-                        disabled={m !== "Mock"}
-                        onClick={() => setPayment(m)}
-                        className={`rounded-full px-4 py-1.5 text-sm ${
-                          payment === m
-                            ? "bg-[var(--space-ink)] text-white"
-                            : "bg-[var(--space-ink)]/5 text-[var(--space-ink)]/40"
-                        }`}
-                        title={m !== "Mock" ? "Coming soon" : undefined}
-                      >
-                        {m}
-                        {m !== "Mock" ? " (soon)" : ""}
-                      </button>
-                    ))}
-                  </div>
-                </div>
               </section>
             )}
 
             {step === 3 && (
+              <section>
+                <h2 className="text-xl font-semibold">Payment</h2>
+                <p className="mt-1 mb-5 text-sm text-[var(--space-ink)]/60">
+                  Enter card details to start your free subscription. No charge will be made.
+                </p>
+                {(() => {
+                  const selected = (catalog?.plans || []).find((p) => p.code === plan);
+                  return (
+                    <FreeCheckout
+                      plan={plan}
+                      planTitle={selected?.title || plan}
+                      listPriceCents={selected?.priceCents ?? 0}
+                      purpose="provision"
+                      onSuccess={onCheckoutSuccess}
+                      onCancel={() => setStep(2)}
+                    />
+                  );
+                })()}
+                {paidCard && (
+                  <p className="mt-3 text-sm text-[var(--space-accent)]">
+                    Authorized: {paidCard} · $0.00
+                  </p>
+                )}
+              </section>
+            )}
+
+            {step === 4 && (
               <section>
                 <h2 className="text-xl font-semibold">Installing</h2>
                 <p className="mt-1 text-sm text-[var(--space-ink)]/60">
@@ -578,8 +623,11 @@ export function SpaceWizard() {
                 {!jobId && !job && (
                   <button
                     type="button"
-                    disabled={busy}
-                    onClick={() => void startInstall()}
+                    disabled={busy || !checkoutSessionId}
+                    onClick={() => {
+                      if (checkoutSessionId) void startInstall(checkoutSessionId);
+                      else setStep(3);
+                    }}
                     className="mt-6 rounded-xl bg-[var(--space-accent)] px-5 py-3 text-sm font-medium text-white disabled:opacity-50"
                   >
                     {busy ? "Starting…" : "Start installation"}
@@ -713,6 +761,7 @@ export function SpaceWizard() {
             disabled={
               step === 0 ||
               busy ||
+              step === 3 ||
               (Boolean(jobId) && job?.status !== "failed" && job?.status !== "succeeded")
             }
             className="rounded-xl px-4 py-2 text-sm font-medium text-[var(--space-ink)]/70 disabled:opacity-30"
@@ -733,11 +782,13 @@ export function SpaceWizard() {
               type="button"
               onClick={() => {
                 setError(null);
+                setCheckoutSessionId(null);
+                setPaidCard(null);
                 setStep(3);
               }}
               className="rounded-xl bg-[var(--space-ink)] px-5 py-2 text-sm font-medium text-white"
             >
-              Review & install
+              Continue to payment
             </button>
           )}
         </div>

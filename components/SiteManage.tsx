@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { formatMb } from "@/lib/format";
 import { SiteUsageGraph } from "@/components/SiteUsageGraph";
+import { FreeCheckout, type CheckoutSuccess } from "@/components/FreeCheckout";
 
 type SiteDetail = {
   hostname: string;
@@ -24,6 +25,8 @@ type SiteDetail = {
     code: string;
     title: string;
     mock_price: string;
+    priceCents?: number;
+    dueTodayCents?: number;
     ramLimitMb: number;
     diskLimitMb: number;
     features: string[];
@@ -40,6 +43,7 @@ export function SiteManage({ slug }: Props) {
   const [busy, setBusy] = useState<string | null>(null);
   const [selectedInstall, setSelectedInstall] = useState("");
   const [selectedPlan, setSelectedPlan] = useState("");
+  const [showCheckout, setShowCheckout] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
@@ -295,11 +299,12 @@ export function SiteManage({ slug }: Props) {
         <section className="mt-6 rounded-2xl border border-[var(--space-ink)]/10 bg-white/70 p-5 backdrop-blur">
           <h2 className="text-lg font-semibold">Plan</h2>
           <p className="mt-1 text-sm text-[var(--space-ink)]/60">
-            Upgrade or change the plan for this site. Capacity must fit in your shared pool.
+            Upgrade or change the plan. Checkout is Stripe-style and free — $0.00 charged.
           </p>
           <div className="mt-4 space-y-3">
             {site.plans.map((plan) => {
               const current = site.plan === plan.code;
+              const listCents = plan.priceCents ?? 0;
               return (
                 <label
                   key={plan.code}
@@ -321,7 +326,20 @@ export function SiteManage({ slug }: Props) {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-baseline gap-2">
                       <span className="font-semibold">{plan.title}</span>
-                      <span className="text-sm text-[var(--space-ink)]/55">{plan.mock_price}</span>
+                      {listCents > 0 ? (
+                        <>
+                          <span className="text-sm text-[var(--space-ink)]/40 line-through">
+                            {plan.mock_price}
+                          </span>
+                          <span className="text-sm font-semibold text-[var(--space-accent)]">
+                            Free
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-sm font-semibold text-[var(--space-accent)]">
+                          Free
+                        </span>
+                      )}
                       {current ? (
                         <span className="rounded-full bg-[var(--space-ink)]/10 px-2 py-0.5 text-xs">
                           Current
@@ -345,17 +363,43 @@ export function SiteManage({ slug }: Props) {
             type="button"
             disabled={!selectedPlan || selectedPlan === site.plan || !!busy}
             onClick={() => {
-              const plan = site.plans.find((p) => p.code === selectedPlan);
-              void runAction(
-                "set-plan",
-                { action: "set-plan", plan: selectedPlan },
-                `Plan updated to ${plan?.title || selectedPlan}.`,
-              );
+              setError(null);
+              setNotice(null);
+              setShowCheckout(true);
             }}
             className="mt-4 rounded-xl bg-[var(--space-accent)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
           >
-            {busy === "set-plan" ? "Updating…" : "Update plan"}
+            Continue to payment
           </button>
+
+          {showCheckout && selectedPlan && selectedPlan !== site.plan && (
+            <div className="mt-5">
+              <FreeCheckout
+                plan={selectedPlan}
+                planTitle={
+                  site.plans.find((p) => p.code === selectedPlan)?.title || selectedPlan
+                }
+                listPriceCents={
+                  site.plans.find((p) => p.code === selectedPlan)?.priceCents ?? 0
+                }
+                purpose="upgrade"
+                hostname={site.hostname}
+                onCancel={() => setShowCheckout(false)}
+                onSuccess={(result: CheckoutSuccess) => {
+                  setShowCheckout(false);
+                  void runAction(
+                    "set-plan",
+                    {
+                      action: "set-plan",
+                      plan: selectedPlan,
+                      checkoutSessionId: result.sessionId,
+                    },
+                    `Plan updated to ${result.planTitle}. Charged $0.00.`,
+                  );
+                }}
+              />
+            </div>
+          )}
         </section>
       )}
     </div>

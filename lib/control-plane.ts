@@ -11,7 +11,10 @@ import { benchEnv, domainSuffix, listBenchApps } from "./bench";
 export type SpacePlan = {
   code: string;
   title: string;
+  /** Display string e.g. "$49 / mo" */
   mock_price: string;
+  /** List price in USD cents per month (catalog). Charged amount is always $0. */
+  priceCents: number;
   features: string[];
   ramLimitMb: number;
   diskLimitMb: number;
@@ -30,6 +33,7 @@ export type SpaceOrder = {
   status: SpaceOrderStatus;
   plan: string;
   paymentMethod: string;
+  checkoutSessionId?: string;
   apps: SpaceOrderApp[];
   jobId?: string;
   deskUrl: string;
@@ -72,7 +76,8 @@ const DEFAULT_PLANS: SpacePlan[] = [
   {
     code: "basic",
     title: "Basic",
-    mock_price: "$0 / mo (mock)",
+    mock_price: "$0 / mo",
+    priceCents: 0,
     features: ["1 site", "ERPNext core", "1 GB RAM", "5 GB disk", "Community support"],
     ramLimitMb: 1024,
     diskLimitMb: 5120,
@@ -82,7 +87,8 @@ const DEFAULT_PLANS: SpacePlan[] = [
   {
     code: "pro",
     title: "Pro",
-    mock_price: "$49 / mo (mock)",
+    mock_price: "$49 / mo",
+    priceCents: 4900,
     features: ["1 site", "ERPNext + HRMS", "3 GB RAM", "15 GB disk", "Priority email support"],
     ramLimitMb: 3072,
     diskLimitMb: 15360,
@@ -92,7 +98,8 @@ const DEFAULT_PLANS: SpacePlan[] = [
   {
     code: "enterprise",
     title: "Enterprise",
-    mock_price: "$199 / mo (mock)",
+    mock_price: "$199 / mo",
+    priceCents: 19900,
     features: ["Multi-site ready", "Custom apps", "5 GB RAM", "30 GB disk", "Dedicated onboarding"],
     ramLimitMb: 5120,
     diskLimitMb: 30720,
@@ -174,6 +181,16 @@ function readStore(): ControlStore {
     }
     // Keep seeded plan quotas if plans empty
     if (raw.plans.length === 0) raw.plans = structuredClone(DEFAULT_PLANS);
+    // Migrate legacy plans: fill priceCents / clean mock labels
+    for (const p of raw.plans) {
+      const seed = DEFAULT_PLANS.find((d) => d.code === p.code);
+      if (typeof p.priceCents !== "number") {
+        p.priceCents = seed?.priceCents ?? 0;
+      }
+      if (p.mock_price?.includes("(mock)") && seed) {
+        p.mock_price = seed.mock_price;
+      }
+    }
     mem().store = raw;
     return raw;
   } catch {
@@ -271,6 +288,7 @@ export type CreateOrderInput = {
   plan: string;
   apps: string[];
   paymentMethod?: string;
+  checkoutSessionId?: string;
 };
 
 export type CreateOrderResult =
@@ -322,7 +340,8 @@ export function createOrder(input: CreateOrderInput): CreateOrderResult {
     hostname,
     status: "Draft",
     plan: plan.code,
-    paymentMethod: input.paymentMethod || "Mock",
+    paymentMethod: input.paymentMethod || "Stripe",
+    checkoutSessionId: input.checkoutSessionId,
     apps: packages.map((pkg) => ({ package: pkg, title: titleForApp(pkg) })),
     deskUrl: `https://${hostname}`,
     ramUsedMb: 0,
@@ -354,6 +373,8 @@ export function updateOrder(
       | "deskUrl"
       | "plan"
       | "apps"
+      | "paymentMethod"
+      | "checkoutSessionId"
     >
   >,
 ): SpaceOrder | null {
@@ -388,6 +409,7 @@ export function getOrderByHostname(hostname: string): SpaceOrder | undefined {
 export function setHostnamePlan(
   hostname: string,
   planCode: string,
+  opts?: { paymentMethod?: string; checkoutSessionId?: string },
 ): { ok: true; order: SpaceOrder } | { ok: false; code: string; message: string } {
   const plan = getPlan(planCode);
   if (!plan) {
@@ -396,7 +418,6 @@ export function setHostnamePlan(
 
   const existing = getOrderByHostname(hostname);
   const oldRam = existing ? planQuotas(existing.plan).ramLimitMb : 0;
-  const oldDisk = existing ? planQuotas(existing.plan).diskLimitMb : 0;
   const pool = allocatedPool(existing?.name);
   const needRam = pool.allocatedRamMb + plan.ramLimitMb;
   const needDisk = pool.allocatedDiskMb + plan.diskLimitMb;
@@ -417,7 +438,12 @@ export function setHostnamePlan(
   }
 
   if (existing) {
-    const updated = updateOrder(existing.name, { plan: plan.code, status: "Active" });
+    const updated = updateOrder(existing.name, {
+      plan: plan.code,
+      status: "Active",
+      paymentMethod: opts?.paymentMethod || existing.paymentMethod || "Stripe",
+      checkoutSessionId: opts?.checkoutSessionId || existing.checkoutSessionId,
+    });
     if (!updated) {
       return { ok: false, code: "UPDATE_FAILED", message: "Could not update plan" };
     }
@@ -435,7 +461,8 @@ export function setHostnamePlan(
     hostname,
     status: "Active",
     plan: plan.code,
-    paymentMethod: "Mock",
+    paymentMethod: opts?.paymentMethod || "Stripe",
+    checkoutSessionId: opts?.checkoutSessionId,
     apps: [{ package: "frappe", title: titleForApp("frappe") }],
     deskUrl: `https://${hostname}`,
     ramUsedMb: 0,
@@ -536,10 +563,18 @@ export async function buildCatalog() {
       code: p.code,
       title: p.title,
       mock_price: p.mock_price,
+      priceCents: p.priceCents ?? 0,
+      dueTodayCents: 0,
+      currency: "usd" as const,
       features: p.features,
       ramLimitMb: p.ramLimitMb,
       diskLimitMb: p.diskLimitMb,
     })),
+    billing: {
+      provider: "stripe-compatible",
+      mode: "free",
+      message: "Card checkout required — you will not be charged.",
+    },
     pool: {
       ramPoolMb: pool.ramPoolMb,
       diskPoolMb: pool.diskPoolMb,

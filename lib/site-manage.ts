@@ -26,6 +26,7 @@ import {
   titleForApp,
   updateOrder,
 } from "./control-plane";
+import { assertPaidCheckout } from "./billing";
 import { sitesLog } from "./sites-activity";
 import { isDevConsoleEnabled } from "./dev-console";
 
@@ -65,6 +66,8 @@ export type SiteDetail = {
     code: string;
     title: string;
     mock_price: string;
+    priceCents: number;
+    dueTodayCents: number;
     ramLimitMb: number;
     diskLimitMb: number;
     features: string[];
@@ -134,6 +137,8 @@ export async function getSiteDetail(hostname: string): Promise<SiteDetail> {
       code: p.code,
       title: p.title,
       mock_price: p.mock_price,
+      priceCents: p.priceCents ?? 0,
+      dueTodayCents: 0,
       ramLimitMb: p.ramLimitMb,
       diskLimitMb: p.diskLimitMb,
       features: p.features,
@@ -248,10 +253,23 @@ function benchUserError(stderr: string, fallback: string): string {
 export function manageSetPlan(
   hostname: string,
   planCode: string,
+  checkoutSessionId?: string,
 ): { ok: true; plan: string; planTitle: string } | { ok: false; error: string } {
   const host = assertSiteName(hostname);
   if (isDevConsoleEnabled()) sitesLog(`manage: set plan ${planCode} for ${host}`);
-  const result = setHostnamePlan(host, planCode);
+
+  const paid = assertPaidCheckout({
+    sessionId: checkoutSessionId,
+    plan: planCode,
+    purpose: "upgrade",
+    hostname: host,
+  });
+  if (!paid.ok) return { ok: false, error: paid.error };
+
+  const result = setHostnamePlan(host, planCode, {
+    paymentMethod: "Stripe",
+    checkoutSessionId: paid.session.id,
+  });
   if (!result.ok) {
     return { ok: false, error: result.message };
   }

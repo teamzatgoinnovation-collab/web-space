@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { rateLimitOk } from "@/lib/bench";
+import { assertPaidCheckout } from "@/lib/billing";
 import { startProvisionJob } from "@/lib/provision";
 
 export const runtime = "nodejs";
@@ -10,7 +11,8 @@ const Body = z.object({
   adminPassword: z.string().min(8).max(128),
   apps: z.array(z.string()).default(["frappe", "erpnext"]),
   plan: z.string().min(1),
-  paymentMethod: z.enum(["Mock", "Stripe", "PayPal"]).optional(),
+  checkoutSessionId: z.string().min(8).max(128),
+  paymentMethod: z.enum(["Stripe"]).optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -37,13 +39,23 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const paid = assertPaidCheckout({
+    sessionId: parsed.data.checkoutSessionId,
+    plan: parsed.data.plan,
+    purpose: "provision",
+  });
+  if (!paid.ok) {
+    return NextResponse.json({ ok: false, error: paid.error }, { status: 402 });
+  }
+
   const jobId = startProvisionJob({
     slug: parsed.data.slug,
     adminPassword: parsed.data.adminPassword,
     apps: parsed.data.apps,
     plan: parsed.data.plan,
-    paymentMethod: parsed.data.paymentMethod || "Mock",
+    paymentMethod: "Stripe",
+    checkoutSessionId: paid.session.id,
   });
 
-  return NextResponse.json({ ok: true, jobId });
+  return NextResponse.json({ ok: true, jobId, checkoutSessionId: paid.session.id });
 }

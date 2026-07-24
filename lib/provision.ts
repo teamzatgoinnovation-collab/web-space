@@ -37,6 +37,7 @@ export type ProvisionPayload = {
   apps: string[];
   plan: string;
   paymentMethod?: string;
+  checkoutSessionId?: string;
   orderName?: string;
 };
 
@@ -49,7 +50,8 @@ export async function createControlOrder(payload: ProvisionPayload): Promise<str
     slug: payload.slug,
     plan: payload.plan,
     apps: payload.apps,
-    paymentMethod: payload.paymentMethod || "Mock",
+    paymentMethod: payload.paymentMethod || "Stripe",
+    checkoutSessionId: payload.checkoutSessionId,
   });
   if (!result.ok) {
     throw new Error(result.message);
