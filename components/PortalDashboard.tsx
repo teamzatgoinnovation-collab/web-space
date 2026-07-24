@@ -74,10 +74,7 @@ export function PortalDashboard() {
             fontSize: "clamp(1.8rem, 4vw, 2.8rem)",
             fontWeight: 800,
             letterSpacing: "-0.02em",
-            background: "linear-gradient(135deg, var(--sp-text) 0%, var(--sp-muted) 100%)",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-            backgroundClip: "text",
+            color: "#ffffff",
           }}
         >
           Dashboard

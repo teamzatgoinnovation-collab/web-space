@@ -73,7 +73,7 @@ function Btn({
 
   const variants: Record<string, React.CSSProperties> = {
     primary: {
-      background: "linear-gradient(135deg, var(--sp-accent), #6046d4)",
+      background: "var(--sp-accent)",
       color: "#fff",
       boxShadow: "0 2px 12px rgba(124,92,252,.35)",
     },
@@ -198,10 +198,7 @@ export function SiteManage({ slug }: Props) {
             fontWeight: 800,
             letterSpacing: "-0.02em",
             wordBreak: "break-all",
-            background: "linear-gradient(135deg, var(--sp-text) 0%, var(--sp-muted) 100%)",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-            backgroundClip: "text",
+            color: "#ffffff",
           }}
         >
           {site.hostname}
@@ -217,7 +214,7 @@ export function SiteManage({ slug }: Props) {
             style={{
               padding: "9px 18px",
               borderRadius: "var(--sp-radius-sm)",
-              background: "linear-gradient(135deg, var(--sp-accent), #6046d4)",
+              background: "var(--sp-accent)",
               color: "#fff",
               fontSize: "0.83rem",
               fontWeight: 600,

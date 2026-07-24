@@ -54,7 +54,7 @@ export function PortalNav() {
 
   return (
     <>
-      {/* ── Fixed glass navbar ── */}
+      {/* ── Fixed navbar ── */}
       <header
         style={{
           position: "fixed",
@@ -63,9 +63,7 @@ export function PortalNav() {
           right: 0,
           height: "var(--sp-nav-h)",
           zIndex: 50,
-          background: "rgba(9, 13, 20, 0.85)",
-          backdropFilter: "blur(16px)",
-          WebkitBackdropFilter: "blur(16px)",
+          background: "#0a0d14",
           borderBottom: "1px solid var(--sp-border)",
         }}
       >
@@ -80,12 +78,11 @@ export function PortalNav() {
               style={{
                 width: 34,
                 height: 34,
-                borderRadius: 10,
-                background: "linear-gradient(135deg, var(--sp-accent), var(--sp-accent2))",
+                borderRadius: 8,
+                background: "var(--sp-accent)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                boxShadow: "0 0 18px rgba(124,92,252,.4)",
                 color: "#fff",
                 flexShrink: 0,
               }}
@@ -96,96 +93,80 @@ export function PortalNav() {
               <span
                 style={{
                   display: "block",
-                  fontSize: "0.6rem",
-                  fontWeight: 600,
+                  fontSize: "0.62rem",
+                  fontWeight: 700,
                   letterSpacing: "0.12em",
                   textTransform: "uppercase",
-                  color: "var(--sp-muted)",
+                  color: "var(--sp-accent)",
                   lineHeight: 1,
                 }}
               >
-                ZatGo
+                ZatGo Space
               </span>
-              <span
-                style={{
-                  display: "block",
-                  fontSize: "0.95rem",
-                  fontWeight: 700,
-                  background: "linear-gradient(90deg, var(--sp-accent), var(--sp-accent2))",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                  backgroundClip: "text",
-                  lineHeight: 1.3,
-                }}
-              >
-                Space Portal
+              <span style={{ fontSize: "1rem", fontWeight: 800, color: "#ffffff", letterSpacing: "-0.01em" }}>
+                Customer Portal
               </span>
             </span>
           </Link>
 
-          {/* Desktop nav */}
-          <nav className="hidden items-center gap-1 md:flex">
-            {LINKS.map((l) => (
-              <Link
-                key={l.href}
-                href={l.href}
-                style={{
-                  padding: "6px 12px",
-                  borderRadius: 8,
-                  fontSize: "0.82rem",
-                  fontWeight: 500,
-                  transition: "all .15s ease",
-                  color: isActive(l.href) ? "#fff" : "var(--sp-muted)",
-                  background: isActive(l.href)
-                    ? "linear-gradient(135deg, var(--sp-accent), #6046d4)"
-                    : "transparent",
-                  boxShadow: isActive(l.href)
-                    ? "0 2px 10px rgba(124,92,252,.35)"
-                    : "none",
-                }}
-              >
-                {l.label}
-              </Link>
-            ))}
+          {/* Desktop nav tabs */}
+          <nav className="hidden items-center gap-1 lg:flex" style={{ overflowX: "auto" }}>
+            {LINKS.map((link) => {
+              const active = isActive(link.href);
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: "var(--sp-radius-sm)",
+                    fontSize: "0.82rem",
+                    fontWeight: active ? 600 : 500,
+                    color: active ? "#ffffff" : "var(--sp-muted)",
+                    background: active ? "var(--sp-surface2)" : "transparent",
+                    border: active ? "1px solid var(--sp-border)" : "1px solid transparent",
+                    transition: "all .15s ease",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {link.label}
+                </Link>
+              );
+            })}
+          </nav>
+
+          {/* Right side CTA + mobile hamburger */}
+          <div className="flex items-center gap-3">
             <a
               href="https://space.zatgo.online"
               target="_blank"
               rel="noreferrer"
+              className="hidden sm:inline-flex items-center gap-1.5"
               style={{
-                marginLeft: 8,
                 padding: "6px 12px",
-                borderRadius: 8,
-                fontSize: "0.82rem",
-                fontWeight: 500,
-                color: "var(--sp-muted)",
+                borderRadius: "var(--sp-radius-sm)",
+                fontSize: "0.78rem",
+                fontWeight: 600,
+                color: "var(--sp-text)",
+                background: "var(--sp-surface2)",
                 border: "1px solid var(--sp-border)",
-                display: "flex",
-                alignItems: "center",
-                gap: 4,
               }}
             >
-              Admin
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+              Open Admin
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" /></svg>
             </a>
-          </nav>
 
-          {/* Mobile hamburger */}
-          <button
-            className="flex items-center justify-center md:hidden"
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: 8,
-              background: "var(--sp-surface2)",
-              border: "1px solid var(--sp-border)",
-              color: "var(--sp-text)",
-              cursor: "pointer",
-            }}
-            onClick={() => setOpen((o) => !o)}
-            aria-label="Toggle menu"
-          >
-            {open ? <CloseIcon /> : <MenuIcon />}
-          </button>
+            {/* Mobile hamburger */}
+            <button
+              type="button"
+              onClick={() => setOpen(!open)}
+              className="lg:hidden p-2 rounded-lg text-slate-300 hover:text-white"
+              style={{ background: "var(--sp-surface2)", border: "1px solid var(--sp-border)" }}
+              aria-label="Toggle menu"
+            >
+              {open ? <CloseIcon /> : <MenuIcon />}
+            </button>
+          </div>
         </div>
       </header>
 
@@ -197,34 +178,58 @@ export function PortalNav() {
             top: "var(--sp-nav-h)",
             left: 0,
             right: 0,
+            bottom: 0,
             zIndex: 40,
-            background: "rgba(9, 13, 20, 0.97)",
-            borderBottom: "1px solid var(--sp-border)",
-            backdropFilter: "blur(16px)",
-            padding: "12px 16px 20px",
+            background: "#0a0d14",
+            padding: "20px 16px",
+            overflowY: "auto",
+            display: "flex",
+            flexDirection: "column",
+            gap: 6,
           }}
+          className="lg:hidden"
         >
-          <nav className="flex flex-col gap-1">
-            {LINKS.map((l) => (
+          {LINKS.map((link) => {
+            const active = isActive(link.href);
+            return (
               <Link
-                key={l.href}
-                href={l.href}
+                key={link.href}
+                href={link.href}
                 onClick={() => setOpen(false)}
                 style={{
-                  padding: "10px 14px",
-                  borderRadius: 8,
+                  padding: "12px 16px",
+                  borderRadius: "var(--sp-radius-sm)",
                   fontSize: "0.9rem",
-                  fontWeight: 500,
-                  color: isActive(l.href) ? "#fff" : "var(--sp-muted)",
-                  background: isActive(l.href)
-                    ? "linear-gradient(135deg, var(--sp-accent), #6046d4)"
-                    : "transparent",
+                  fontWeight: active ? 600 : 500,
+                  color: active ? "#ffffff" : "var(--sp-muted)",
+                  background: active ? "var(--sp-surface2)" : "transparent",
+                  border: active ? "1px solid var(--sp-border)" : "1px solid transparent",
                 }}
               >
-                {l.label}
+                {link.label}
               </Link>
-            ))}
-          </nav>
+            );
+          })}
+          <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--sp-border)" }}>
+            <a
+              href="https://space.zatgo.online"
+              target="_blank"
+              rel="noreferrer"
+              style={{
+                display: "block",
+                textAlign: "center",
+                padding: "12px",
+                borderRadius: "var(--sp-radius-sm)",
+                fontSize: "0.85rem",
+                fontWeight: 600,
+                color: "var(--sp-text)",
+                background: "var(--sp-surface2)",
+                border: "1px solid var(--sp-border)",
+              }}
+            >
+              Open Admin Desk
+            </a>
+          </div>
         </div>
       )}
     </>

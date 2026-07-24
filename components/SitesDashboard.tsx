@@ -300,10 +300,7 @@ export function SitesDashboard() {
               fontSize: "clamp(2rem, 5vw, 3.2rem)",
               fontWeight: 800,
               letterSpacing: "-0.02em",
-              background: "linear-gradient(135deg, var(--sp-text) 0%, var(--sp-muted) 100%)",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-              backgroundClip: "text",
+              color: "#ffffff",
               lineHeight: 1.15,
             }}
           >
@@ -336,7 +333,7 @@ export function SitesDashboard() {
               padding: "9px 18px",
               borderRadius: "var(--sp-radius-sm)",
               border: "none",
-              background: busy ? "rgba(124,92,252,.5)" : "linear-gradient(135deg, var(--sp-accent), #6046d4)",
+              background: busy ? "rgba(99,102,241,.5)" : "var(--sp-accent)",
               color: "#fff",
               fontSize: "0.83rem",
               fontWeight: 600,
@@ -468,7 +465,7 @@ export function SitesDashboard() {
                     marginTop: 8,
                     padding: "9px 20px",
                     borderRadius: "var(--sp-radius-sm)",
-                    background: "linear-gradient(135deg, var(--sp-accent), #6046d4)",
+                    background: "var(--sp-accent)",
                     color: "#fff",
                     fontSize: "0.83rem",
                     fontWeight: 600,
@@ -574,7 +571,7 @@ export function SitesDashboard() {
                           style={{
                             padding: "7px 14px",
                             borderRadius: 8,
-                            background: "linear-gradient(135deg, var(--sp-accent), #6046d4)",
+                            background: "var(--sp-accent)",
                             color: "#fff",
                             fontSize: "0.78rem",
                             fontWeight: 600,
