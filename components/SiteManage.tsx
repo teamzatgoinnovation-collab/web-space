@@ -117,7 +117,7 @@ export function SiteManage({ slug }: Props) {
   const locked = !site.onDocker;
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-3xl flex-col px-4 py-10 sm:px-6">
+    <div className="flex flex-col">
       <header className="mb-8">
         <Link
           href="/"

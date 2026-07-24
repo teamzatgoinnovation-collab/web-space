@@ -245,7 +245,7 @@ export function SitesDashboard() {
   const busy = loading || refreshing || detailsLoading;
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-4xl flex-col px-4 py-10 sm:px-6">
+    <div className="flex flex-col">
       <header className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-sm font-medium tracking-wide text-[var(--space-accent)]">ZatGo</p>

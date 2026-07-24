@@ -91,3 +91,68 @@ export async function frappeGetJob(name: string) {
 export async function frappeMonitoringSummary() {
   return callMethod("space.api.v1.space.monitoring_summary");
 }
+
+export async function frappeListSubscriptions() {
+  return callMethod("space.api.v1.space.list_subscriptions");
+}
+
+/** Phase 2 v2 methods */
+async function callV2(method: string, body?: Record<string, unknown>) {
+  return callMethod(`space.api.v2.space.${method}`, body);
+}
+
+export async function frappePortalDashboard() {
+  return callV2("portal_dashboard");
+}
+
+export async function frappeAdminDashboard() {
+  return callV2("admin_dashboard");
+}
+
+export async function frappeListJobs(site?: string) {
+  return callV2("list_jobs", site ? { site } : {});
+}
+
+export async function frappeGetJobDetail(name: string) {
+  return callV2("get_job_detail", { name });
+}
+
+export async function frappeListBackups(site?: string) {
+  return callV2("list_backups", site ? { site } : {});
+}
+
+export async function frappeBackupNow(site: string) {
+  return callV2("backup_now", { site });
+}
+
+export async function frappeListDomains(site?: string) {
+  return callV2("list_domains", site ? { site } : {});
+}
+
+export async function frappeAttachDomain(site: string, domain: string, primary = 0) {
+  return callV2("attach_domain", { site, domain, primary });
+}
+
+export async function frappeListInvoices() {
+  return callV2("list_invoices");
+}
+
+export async function frappeListUsage(site?: string) {
+  return callV2("list_usage", site ? { site } : {});
+}
+
+export async function frappeListPaymentHistory() {
+  return callV2("list_payment_history");
+}
+
+export async function frappeListNotifications(unreadOnly = 0) {
+  return callV2("list_notifications", { unread_only: unreadOnly });
+}
+
+export async function frappeMarkNotificationRead(name: string) {
+  return callV2("mark_notification_read", { name });
+}
+
+export async function frappeGetProfile() {
+  return callV2("get_profile");
+}

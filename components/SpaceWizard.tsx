@@ -366,7 +366,7 @@ export function SpaceWizard() {
   }, [job]);
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-3xl flex-col px-4 py-10 sm:px-6">
+    <div className="flex flex-col">
       <header className="mb-10">
         <div className="flex items-start justify-between gap-3">
           <div>
