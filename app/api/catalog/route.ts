@@ -13,9 +13,25 @@ export async function GET() {
         ok?: boolean;
         data?: Record<string, unknown>;
       };
-      const data = message?.data || message;
+      const data = (message?.data || message) as Record<string, unknown>;
       if (data && typeof data === "object") {
-        return NextResponse.json({ ok: true, ...(data as object), controlPlane: "space" });
+        const plans = Array.isArray(data.plans)
+          ? (data.plans as Record<string, unknown>[]).map((p) => {
+              const feat = p.features;
+              const features = Array.isArray(feat)
+                ? feat
+                : typeof feat === "string"
+                  ? feat.split(/\n+/).map((x) => x.trim()).filter(Boolean)
+                  : [];
+              return { ...p, features };
+            })
+          : [];
+        return NextResponse.json({
+          ok: true,
+          ...data,
+          plans,
+          controlPlane: "space",
+        });
       }
     }
     const catalog = await buildCatalog();

@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { rateLimitOk } from "@/lib/bench";
 import {
+  frappeControlEnabled,
+  frappeDeleteSite,
+  frappeResumeSite,
+  frappeSuspendSite,
+} from "@/lib/frappe-space";
+import {
   hostnameFromSlug,
   manageClearCache,
   manageInstallApp,
@@ -35,6 +41,15 @@ const Body = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("migrate"),
   }),
+  z.object({
+    action: z.literal("suspend"),
+  }),
+  z.object({
+    action: z.literal("resume"),
+  }),
+  z.object({
+    action: z.literal("delete"),
+  }),
 ]);
 
 export async function POST(req: NextRequest, ctx: Ctx) {
@@ -62,6 +77,38 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     const { slug } = await ctx.params;
     const hostname = hostnameFromSlug(slug);
     const body = parsed.data;
+
+    if (
+      frappeControlEnabled() &&
+      (body.action === "suspend" || body.action === "resume" || body.action === "delete")
+    ) {
+      const call =
+        body.action === "suspend"
+          ? frappeSuspendSite
+          : body.action === "resume"
+            ? frappeResumeSite
+            : frappeDeleteSite;
+      const message = (await call(slug)) as { ok?: boolean; data?: unknown; error?: string };
+      if (message && message.ok === false) {
+        return NextResponse.json(
+          { ok: false, error: message.error || "Action failed" },
+          { status: 400 },
+        );
+      }
+      return NextResponse.json({
+        ok: true,
+        action: body.action,
+        data: message?.data ?? message,
+        controlPlane: "space",
+      });
+    }
+
+    if (body.action === "suspend" || body.action === "resume" || body.action === "delete") {
+      return NextResponse.json(
+        { ok: false, error: "Lifecycle actions require SPACE_CONTROL_PLANE=frappe" },
+        { status: 400 },
+      );
+    }
 
     if (body.action === "install-app") {
       const result = await manageInstallApp(hostname, body.package);
