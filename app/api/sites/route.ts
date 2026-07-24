@@ -5,7 +5,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
-  const refresh = req.nextUrl.searchParams.get("refresh") !== "0";
+  // Default light: only run live docker metrics when ?refresh=1
+  const refresh = req.nextUrl.searchParams.get("refresh") === "1";
   try {
     const payload = await collectSitesUsage({ refreshMetrics: refresh });
     const status = payload.ok ? 200 : 502;

@@ -182,8 +182,9 @@ export function SitesDashboard() {
   }, []);
 
   const load = useCallback(
-    async (opts?: { soft?: boolean }) => {
+    async (opts?: { soft?: boolean; details?: boolean }) => {
       const soft = Boolean(opts?.soft);
+      const wantDetails = Boolean(opts?.details);
       if (soft) {
         setRefreshing(true);
       } else {
@@ -192,7 +193,7 @@ export function SitesDashboard() {
       setError(null);
 
       try {
-        // Fast path: site names only (usually a few seconds)
+        // Fast path only by default — avoids docker/bench storms on every page view
         const quick = await fetch("/api/sites?refresh=0", { cache: "no-store" });
         const quickData = await quick.json();
         if (!quickData.ok && (!quickData.sites || quickData.sites.length === 0)) {
@@ -205,12 +206,15 @@ export function SitesDashboard() {
         applyPayload(quickData);
         setLoading(false);
 
+        if (!wantDetails) {
+          return;
+        }
+
         if (!quickData.sites?.length && quickData.error) {
           setError("Could not reach the server to list sites. Try Refresh in a moment.");
           return;
         }
 
-        // Slow path: memory, storage, apps (can take a while)
         setDetailsLoading(true);
         setRefreshing(true);
         const full = await fetch("/api/sites?refresh=1", { cache: "no-store" });
@@ -232,7 +236,7 @@ export function SitesDashboard() {
   );
 
   useEffect(() => {
-    void load();
+    void load({ details: false });
   }, [load]);
 
   const readyCount = sites.filter((s) => s.onDocker).length;
@@ -265,7 +269,7 @@ export function SitesDashboard() {
             <button
               type="button"
               disabled={busy}
-              onClick={() => void load({ soft: true })}
+              onClick={() => void load({ soft: true, details: true })}
               className="rounded-xl bg-[var(--space-accent)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
             >
               {busy && !showSkeleton ? "Updating…" : "Refresh"}

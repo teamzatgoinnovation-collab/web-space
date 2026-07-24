@@ -64,6 +64,11 @@ export type SitesUsagePayload = {
   source?: "docker";
 };
 
+type UsageCacheEntry = { at: number; payload: SitesUsagePayload };
+
+const usageCache = new Map<string, UsageCacheEntry>();
+const usageInflight = new Map<string, Promise<SitesUsagePayload>>();
+
 /** Equal soft RAM share of measured backend container RSS across listed sites. */
 export function attributeRamEqual(totalMemMb: number, siteCount: number): number[] {
   if (siteCount <= 0) return [];
@@ -175,6 +180,61 @@ export async function collectSitesUsage(opts?: {
   refreshMetrics?: boolean;
 }): Promise<SitesUsagePayload> {
   const refresh = opts?.refreshMetrics !== false;
+  const cacheKey = refresh ? "live" : "snap";
+  const ttlMs = refresh ? 60_000 : 20_000;
+  const hit = usageCache.get(cacheKey);
+  if (hit && Date.now() - hit.at < ttlMs) {
+    return { ...hit.payload, metricsSource: refresh ? "live" : "snapshot" };
+  }
+
+  // Single-flight: avoid stampeding the bench on concurrent page loads
+  const existing = usageInflight.get(cacheKey);
+  if (existing) return existing;
+
+  const promise = collectSitesUsageUncached({ refreshMetrics: refresh })
+    .then((payload) => {
+      usageCache.set(cacheKey, { at: Date.now(), payload });
+      // Warm snap cache from live results too
+      if (refresh && payload.ok) {
+        usageCache.set("snap", {
+          at: Date.now(),
+          payload: {
+            ...payload,
+            metricsSource: "snapshot",
+          },
+        });
+      }
+      return payload;
+    })
+    .finally(() => {
+      usageInflight.delete(cacheKey);
+    });
+  usageInflight.set(cacheKey, promise);
+  return promise;
+}
+
+async function mapPool<T, R>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(concurrency, Math.max(1, items.length)) }, async () => {
+    while (true) {
+      const i = next++;
+      if (i >= items.length) return;
+      out[i] = await fn(items[i]!, i);
+    }
+  });
+  await Promise.all(workers);
+  return out;
+}
+
+async function collectSitesUsageUncached(opts?: {
+  refreshMetrics?: boolean;
+}): Promise<SitesUsagePayload> {
+  const refresh = opts?.refreshMetrics !== false;
   const env = benchEnv();
   const poolBase = allocatedPool();
   const snapshot = listSitesUsageSnapshot();
@@ -266,35 +326,24 @@ export async function collectSitesUsage(opts?: {
   const mem = await getBackendMemStats(env);
   if (log) sitesLog(`container memory: ${mem.raw || `${mem.usedMb} / ${mem.limitMb} MB`}`);
 
-  const diskSizes = await Promise.all(
-    sites.map(async (s) => {
-      if (!s.onDocker) return 0;
-      const mb = await getSiteDiskMb(env, s.hostname);
-      if (log) sitesLog(`${s.hostname} disk=${mb} MB`);
-      return mb;
-    }),
-  );
-
-  const appsLists = await Promise.all(
-    sites.map(async (s) => {
-      if (!s.onDocker) return [] as string[];
-      const apps = await listInstalledAppsOnSite(env, s.hostname);
-      if (log) {
-        sitesLog(
-          `${s.hostname} apps=${apps.length ? apps.join(",") : "(none)"}`,
-        );
-      }
-      return apps;
-    }),
-  );
+  // Low concurrency — parallel docker exec storms the 1-vCPU droplet
+  const metrics = await mapPool(sites, 2, async (s) => {
+    if (!s.onDocker) return { diskUsedMb: 0, apps: [] as string[] };
+    const diskUsedMb = await getSiteDiskMb(env, s.hostname);
+    const apps = await listInstalledAppsOnSite(env, s.hostname);
+    if (log) {
+      sitesLog(`${s.hostname} disk=${diskUsedMb} MB apps=${apps.join(",") || "(none)"}`);
+    }
+    return { diskUsedMb, apps };
+  });
 
   const ramShares = attributeRamEqual(mem.usedMb, Math.max(1, dockerSites.length));
   let dockerIdx = 0;
   const now = new Date().toISOString();
 
   const enriched: SiteUsageRow[] = sites.map((site, i) => {
-    const diskUsedMb = diskSizes[i] ?? 0;
-    const apps = appsLists[i] ?? [];
+    const diskUsedMb = metrics[i]?.diskUsedMb ?? 0;
+    const apps = metrics[i]?.apps ?? [];
     let ramUsedMb = 0;
     if (site.onDocker) {
       ramUsedMb = ramShares[dockerIdx] ?? 0;

@@ -74,21 +74,31 @@ export type SiteDetail = {
   }[];
 };
 
+type DetailCache = { at: number; detail: SiteDetail };
+const detailCache = new Map<string, DetailCache>();
+const DETAIL_TTL_MS = 30_000;
+
 export async function getSiteDetail(hostname: string): Promise<SiteDetail> {
-  const env = benchEnv();
   const host = assertSiteName(hostname);
+  const cached = detailCache.get(host);
+  if (cached && Date.now() - cached.at < DETAIL_TTL_MS) {
+    return cached.detail;
+  }
+
+  const env = benchEnv();
   const log = isDevConsoleEnabled();
   if (log) sitesLog(`manage: load ${host}`);
 
-  const [listed, installed, benchApps, diskUsedMb, mem] = await Promise.all([
-    listSites(env),
-    listInstalledAppsOnSite(env, host),
+  // Sequential-ish: list sites first, then site-local metrics (avoids 5-way docker storm)
+  const listed = await listSites(env);
+  const onDocker = listed.sites.includes(host);
+  const [installed, benchApps, diskUsedMb, mem] = await Promise.all([
+    onDocker ? listInstalledAppsOnSite(env, host) : Promise.resolve([] as string[]),
     listBenchApps(env),
-    getSiteDiskMb(env, host),
+    onDocker ? getSiteDiskMb(env, host) : Promise.resolve(0),
     getBackendMemStats(env),
   ]);
 
-  const onDocker = listed.sites.includes(host);
   const order = getOrderByHostname(host);
   const suffix = domainSuffix();
   const kind =
@@ -118,7 +128,7 @@ export async function getSiteDetail(hostname: string): Promise<SiteDetail> {
     );
   }
 
-  return {
+  const detail: SiteDetail = {
     hostname: host,
     slug: slugFromHostname(host),
     deskUrl: `https://${host}`,
@@ -144,6 +154,8 @@ export async function getSiteDetail(hostname: string): Promise<SiteDetail> {
       features: p.features,
     })),
   };
+  detailCache.set(host, { at: Date.now(), detail });
+  return detail;
 }
 
 export async function manageInstallApp(
