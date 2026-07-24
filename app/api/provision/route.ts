@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { rateLimitOk } from "@/lib/bench";
 import { assertPaidCheckout } from "@/lib/billing";
+import { frappeControlEnabled, frappeCreateSite } from "@/lib/frappe-space";
 import { startProvisionJob } from "@/lib/provision";
 
 export const runtime = "nodejs";
@@ -48,14 +49,44 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: paid.error }, { status: 402 });
   }
 
-  const jobId = startProvisionJob({
-    slug: parsed.data.slug,
-    adminPassword: parsed.data.adminPassword,
-    apps: parsed.data.apps,
-    plan: parsed.data.plan,
-    paymentMethod: "Stripe",
-    checkoutSessionId: paid.session.id,
-  });
+  try {
+    if (frappeControlEnabled()) {
+      const message = (await frappeCreateSite({
+        site_name: parsed.data.slug,
+        plan: parsed.data.plan,
+        admin_password: parsed.data.adminPassword,
+      })) as { ok?: boolean; data?: { job?: string; site?: string; domain?: string }; error?: string };
 
-  return NextResponse.json({ ok: true, jobId, checkoutSessionId: paid.session.id });
+      if (message && message.ok === false) {
+        return NextResponse.json(
+          { ok: false, error: message.error || "Create failed" },
+          { status: 400 },
+        );
+      }
+      const data = message?.data || (message as { job?: string });
+      return NextResponse.json({
+        ok: true,
+        jobId: data?.job,
+        site: (data as { site?: string })?.site,
+        checkoutSessionId: paid.session.id,
+        controlPlane: "space",
+      });
+    }
+
+    const jobId = startProvisionJob({
+      slug: parsed.data.slug,
+      adminPassword: parsed.data.adminPassword,
+      apps: parsed.data.apps,
+      plan: parsed.data.plan,
+      paymentMethod: "Stripe",
+      checkoutSessionId: paid.session.id,
+    });
+
+    return NextResponse.json({ ok: true, jobId, checkoutSessionId: paid.session.id });
+  } catch (err) {
+    return NextResponse.json(
+      { ok: false, error: err instanceof Error ? err.message : "Provision failed" },
+      { status: 500 },
+    );
+  }
 }
