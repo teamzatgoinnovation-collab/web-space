@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { formatMb } from "@/lib/format";
+import { SiteUsageGraph } from "@/components/SiteUsageGraph";
 
 type SiteDetail = {
   hostname: string;
@@ -16,6 +17,7 @@ type SiteDetail = {
   ramLimitMb: number;
   diskLimitMb: number;
   diskUsedMb: number;
+  ramUsedMb: number;
   installedApps: { package: string; title: string; canUninstall: boolean }[];
   availableApps: { package: string; title: string }[];
   plans: {
@@ -182,23 +184,19 @@ export function SiteManage({ slug }: Props) {
 
       <section className="rounded-2xl border border-[var(--space-ink)]/10 bg-white/70 p-5 backdrop-blur">
         <h2 className="text-lg font-semibold">Usage</h2>
-        <p className="mt-2 text-sm text-[var(--space-ink)]/70">
-          Storage:{" "}
-          <span className="font-medium tabular-nums text-[var(--space-ink)]">
-            {formatMb(site.diskUsedMb)}
-          </span>
-          {site.diskLimitMb > 0 ? (
-            <span className="text-[var(--space-ink)]/45">
-              {" "}
-              of {formatMb(site.diskLimitMb)} included
-            </span>
-          ) : null}
+        <p className="mt-1 text-sm text-[var(--space-ink)]/60">
+          Storage and memory for this site
+          {site.planTitle ? ` · ${site.planTitle}` : ""}.
         </p>
-        {site.planTitle ? (
-          <p className="mt-1 text-sm text-[var(--space-ink)]/60">
-            Current plan: {site.planTitle}
-          </p>
-        ) : null}
+        <div className="mt-5">
+          <SiteUsageGraph
+            diskUsedMb={site.diskUsedMb}
+            diskLimitMb={site.diskLimitMb}
+            ramUsedMb={site.ramUsedMb}
+            ramLimitMb={site.ramLimitMb}
+            appCount={site.installedApps.filter((a) => a.package !== "frappe").length}
+          />
+        </div>
       </section>
 
       <section className="mt-6 rounded-2xl border border-[var(--space-ink)]/10 bg-white/70 p-5 backdrop-blur">

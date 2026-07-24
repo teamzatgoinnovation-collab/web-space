@@ -8,6 +8,7 @@ import {
   benchEnv,
   clearCache,
   domainSuffix,
+  getBackendMemStats,
   getSiteDiskMb,
   installApp,
   listBenchApps,
@@ -16,6 +17,7 @@ import {
   refreshSiteAfterChange,
   uninstallApp,
 } from "./bench";
+import { attributeRamEqual } from "./sites-usage";
 import {
   getOrderByHostname,
   listPlans,
@@ -55,6 +57,8 @@ export type SiteDetail = {
   ramLimitMb: number;
   diskLimitMb: number;
   diskUsedMb: number;
+  /** Soft share of shared platform memory for this site. */
+  ramUsedMb: number;
   installedApps: { package: string; title: string; canUninstall: boolean }[];
   availableApps: { package: string; title: string }[];
   plans: {
@@ -73,11 +77,12 @@ export async function getSiteDetail(hostname: string): Promise<SiteDetail> {
   const log = isDevConsoleEnabled();
   if (log) sitesLog(`manage: load ${host}`);
 
-  const [listed, installed, benchApps, diskUsedMb] = await Promise.all([
+  const [listed, installed, benchApps, diskUsedMb, mem] = await Promise.all([
     listSites(env),
     listInstalledAppsOnSite(env, host),
     listBenchApps(env),
     getSiteDiskMb(env, host),
+    getBackendMemStats(env),
   ]);
 
   const onDocker = listed.sites.includes(host);
@@ -86,6 +91,12 @@ export async function getSiteDetail(hostname: string): Promise<SiteDetail> {
   const kind =
     host === `erp.${suffix}` ? "erp" : order ? "space" : ("unmanaged" as const);
   const q = order ? planQuotas(order.plan) : { ramLimitMb: 0, diskLimitMb: 0 };
+
+  const dockerCount = Math.max(1, listed.sites.length);
+  const ramShares = attributeRamEqual(mem.usedMb, dockerCount);
+  const dockerIndex = listed.sites.indexOf(host);
+  const ramUsedMb =
+    onDocker && dockerIndex >= 0 ? ramShares[dockerIndex] ?? 0 : 0;
 
   const installedSet = new Set(installed);
   const installedApps = installed.map((pkg) => ({
@@ -100,7 +111,7 @@ export async function getSiteDetail(hostname: string): Promise<SiteDetail> {
 
   if (log) {
     sitesLog(
-      `manage: ${host} onDocker=${onDocker} apps=${installed.join(",") || "(none)"} disk=${diskUsedMb}MB`,
+      `manage: ${host} onDocker=${onDocker} apps=${installed.join(",") || "(none)"} disk=${diskUsedMb}MB ram~${ramUsedMb}MB`,
     );
   }
 
@@ -116,6 +127,7 @@ export async function getSiteDetail(hostname: string): Promise<SiteDetail> {
     ramLimitMb: q.ramLimitMb,
     diskLimitMb: q.diskLimitMb,
     diskUsedMb,
+    ramUsedMb,
     installedApps,
     availableApps,
     plans: listPlans().map((p) => ({
