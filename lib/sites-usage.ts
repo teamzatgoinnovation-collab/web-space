@@ -64,11 +64,6 @@ export type SitesUsagePayload = {
   source?: "docker";
 };
 
-type UsageCacheEntry = { at: number; payload: SitesUsagePayload };
-
-const usageCache = new Map<string, UsageCacheEntry>();
-const usageInflight = new Map<string, Promise<SitesUsagePayload>>();
-
 /** Equal soft RAM share of measured backend container RSS across listed sites. */
 export function attributeRamEqual(totalMemMb: number, siteCount: number): number[] {
   if (siteCount <= 0) return [];
@@ -176,43 +171,7 @@ function buildMergedRows(
   return rows;
 }
 
-export async function collectSitesUsage(opts?: {
-  refreshMetrics?: boolean;
-}): Promise<SitesUsagePayload> {
-  const refresh = opts?.refreshMetrics !== false;
-  const cacheKey = refresh ? "live" : "snap";
-  const ttlMs = refresh ? 60_000 : 20_000;
-  const hit = usageCache.get(cacheKey);
-  if (hit && Date.now() - hit.at < ttlMs) {
-    return { ...hit.payload, metricsSource: refresh ? "live" : "snapshot" };
-  }
-
-  // Single-flight: avoid stampeding the bench on concurrent page loads
-  const existing = usageInflight.get(cacheKey);
-  if (existing) return existing;
-
-  const promise = collectSitesUsageUncached({ refreshMetrics: refresh })
-    .then((payload) => {
-      usageCache.set(cacheKey, { at: Date.now(), payload });
-      // Warm snap cache from live results too
-      if (refresh && payload.ok) {
-        usageCache.set("snap", {
-          at: Date.now(),
-          payload: {
-            ...payload,
-            metricsSource: "snapshot",
-          },
-        });
-      }
-      return payload;
-    })
-    .finally(() => {
-      usageInflight.delete(cacheKey);
-    });
-  usageInflight.set(cacheKey, promise);
-  return promise;
-}
-
+/** Cap parallel docker execs so Space doesn't spike the 1-vCPU droplet. */
 async function mapPool<T, R>(
   items: T[],
   concurrency: number,
@@ -220,10 +179,9 @@ async function mapPool<T, R>(
 ): Promise<R[]> {
   const out: R[] = new Array(items.length);
   let next = 0;
-  const workers = Array.from({ length: Math.min(concurrency, Math.max(1, items.length)) }, async () => {
-    while (true) {
+  const workers = Array.from({ length: Math.max(1, concurrency) }, async () => {
+    while (next < items.length) {
       const i = next++;
-      if (i >= items.length) return;
       out[i] = await fn(items[i]!, i);
     }
   });
@@ -231,10 +189,50 @@ async function mapPool<T, R>(
   return out;
 }
 
+type UsageCacheEntry = { at: number; payload: SitesUsagePayload };
+const usageCache: { list?: UsageCacheEntry; live?: UsageCacheEntry; inflight?: Promise<SitesUsagePayload> } =
+  {};
+
+const LIST_TTL_MS = 20_000;
+const LIVE_TTL_MS = 90_000;
+
+export async function collectSitesUsage(opts?: {
+  refreshMetrics?: boolean;
+}): Promise<SitesUsagePayload> {
+  const refresh = opts?.refreshMetrics === true;
+  const now = Date.now();
+
+  if (!refresh) {
+    const hit = usageCache.list;
+    if (hit && now - hit.at < LIST_TTL_MS) return hit.payload;
+  } else {
+    const hit = usageCache.live;
+    if (hit && now - hit.at < LIVE_TTL_MS) return hit.payload;
+    if (usageCache.inflight) return usageCache.inflight;
+  }
+
+  const run = collectSitesUsageUncached({ refreshMetrics: refresh }).then((payload) => {
+    const entry = { at: Date.now(), payload };
+    if (refresh) usageCache.live = entry;
+    else usageCache.list = entry;
+    // Live also satisfies list cache briefly
+    if (refresh) usageCache.list = entry;
+    return payload;
+  });
+
+  if (refresh) {
+    usageCache.inflight = run.finally(() => {
+      usageCache.inflight = undefined;
+    });
+    return usageCache.inflight;
+  }
+  return run;
+}
+
 async function collectSitesUsageUncached(opts?: {
   refreshMetrics?: boolean;
 }): Promise<SitesUsagePayload> {
-  const refresh = opts?.refreshMetrics !== false;
+  const refresh = opts?.refreshMetrics === true;
   const env = benchEnv();
   const poolBase = allocatedPool();
   const snapshot = listSitesUsageSnapshot();
@@ -326,24 +324,30 @@ async function collectSitesUsageUncached(opts?: {
   const mem = await getBackendMemStats(env);
   if (log) sitesLog(`container memory: ${mem.raw || `${mem.usedMb} / ${mem.limitMb} MB`}`);
 
-  // Low concurrency — parallel docker exec storms the 1-vCPU droplet
-  const metrics = await mapPool(sites, 2, async (s) => {
-    if (!s.onDocker) return { diskUsedMb: 0, apps: [] as string[] };
-    const diskUsedMb = await getSiteDiskMb(env, s.hostname);
+  // Sequential-ish probes (concurrency 2) to avoid CPU spikes on small droplets
+  const diskSizes = await mapPool(sites, 2, async (s) => {
+    if (!s.onDocker) return 0;
+    const mb = await getSiteDiskMb(env, s.hostname);
+    if (log) sitesLog(`${s.hostname} disk=${mb} MB`);
+    return mb;
+  });
+
+  const appsLists = await mapPool(sites, 2, async (s) => {
+    if (!s.onDocker) return [] as string[];
     const apps = await listInstalledAppsOnSite(env, s.hostname);
     if (log) {
-      sitesLog(`${s.hostname} disk=${diskUsedMb} MB apps=${apps.join(",") || "(none)"}`);
+      sitesLog(`${s.hostname} apps=${apps.length ? apps.join(",") : "(none)"}`);
     }
-    return { diskUsedMb, apps };
+    return apps;
   });
 
   const ramShares = attributeRamEqual(mem.usedMb, Math.max(1, dockerSites.length));
   let dockerIdx = 0;
-  const now = new Date().toISOString();
+  const nowIso = new Date().toISOString();
 
   const enriched: SiteUsageRow[] = sites.map((site, i) => {
-    const diskUsedMb = metrics[i]?.diskUsedMb ?? 0;
-    const apps = metrics[i]?.apps ?? [];
+    const diskUsedMb = diskSizes[i] ?? 0;
+    const apps = appsLists[i] ?? [];
     let ramUsedMb = 0;
     if (site.onDocker) {
       ramUsedMb = ramShares[dockerIdx] ?? 0;
@@ -354,7 +358,7 @@ async function collectSitesUsageUncached(opts?: {
       ramUsedMb,
       diskUsedMb,
       apps,
-      usageUpdatedAt: now,
+      usageUpdatedAt: nowIso,
       status: site.onDocker
         ? site.kind === "space"
           ? site.status || "Active"
@@ -368,7 +372,7 @@ async function collectSitesUsageUncached(opts?: {
       updateOrder(s.name, {
         ramUsedMb: s.ramUsedMb,
         diskUsedMb: s.diskUsedMb,
-        usageUpdatedAt: now,
+        usageUpdatedAt: nowIso,
       });
     }
   }

@@ -5,12 +5,19 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
-  // Default light: only run live docker metrics when ?refresh=1
+  // Default cheap list; live metrics only when refresh=1 (manual / explicit).
   const refresh = req.nextUrl.searchParams.get("refresh") === "1";
   try {
     const payload = await collectSitesUsage({ refreshMetrics: refresh });
     const status = payload.ok ? 200 : 502;
-    return NextResponse.json(payload, { status });
+    return NextResponse.json(payload, {
+      status,
+      headers: {
+        "Cache-Control": refresh
+          ? "private, max-age=30"
+          : "private, max-age=10",
+      },
+    });
   } catch (err) {
     return NextResponse.json(
       {

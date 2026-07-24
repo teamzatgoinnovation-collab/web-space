@@ -193,7 +193,7 @@ export function SitesDashboard() {
       setError(null);
 
       try {
-        // Fast path only by default — avoids docker/bench storms on every page view
+        // Fast path only by default — avoids docker du/list-apps CPU spikes.
         const quick = await fetch("/api/sites?refresh=0", { cache: "no-store" });
         const quickData = await quick.json();
         if (!quickData.ok && (!quickData.sites || quickData.sites.length === 0)) {
@@ -206,15 +206,14 @@ export function SitesDashboard() {
         applyPayload(quickData);
         setLoading(false);
 
-        if (!wantDetails) {
-          return;
-        }
-
         if (!quickData.sites?.length && quickData.error) {
           setError("Could not reach the server to list sites. Try Refresh in a moment.");
           return;
         }
 
+        if (!wantDetails) return;
+
+        // Live metrics only when user asks (Refresh) — capped + cached server-side.
         setDetailsLoading(true);
         setRefreshing(true);
         const full = await fetch("/api/sites?refresh=1", { cache: "no-store" });

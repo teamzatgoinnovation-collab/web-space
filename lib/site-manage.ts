@@ -8,7 +8,6 @@ import {
   benchEnv,
   clearCache,
   domainSuffix,
-  getBackendMemStats,
   getSiteDiskMb,
   installApp,
   listBenchApps,
@@ -17,7 +16,6 @@ import {
   refreshSiteAfterChange,
   uninstallApp,
 } from "./bench";
-import { attributeRamEqual } from "./sites-usage";
 import {
   getOrderByHostname,
   listPlans,
@@ -74,42 +72,27 @@ export type SiteDetail = {
   }[];
 };
 
-type DetailCache = { at: number; detail: SiteDetail };
-const detailCache = new Map<string, DetailCache>();
-const DETAIL_TTL_MS = 30_000;
-
 export async function getSiteDetail(hostname: string): Promise<SiteDetail> {
-  const host = assertSiteName(hostname);
-  const cached = detailCache.get(host);
-  if (cached && Date.now() - cached.at < DETAIL_TTL_MS) {
-    return cached.detail;
-  }
-
   const env = benchEnv();
+  const host = assertSiteName(hostname);
   const log = isDevConsoleEnabled();
   if (log) sitesLog(`manage: load ${host}`);
 
-  // Sequential-ish: list sites first, then site-local metrics (avoids 5-way docker storm)
-  const listed = await listSites(env);
-  const onDocker = listed.sites.includes(host);
-  const [installed, benchApps, diskUsedMb, mem] = await Promise.all([
-    onDocker ? listInstalledAppsOnSite(env, host) : Promise.resolve([] as string[]),
+  const [listed, installed, benchApps, diskUsedMb] = await Promise.all([
+    listSites(env),
+    listInstalledAppsOnSite(env, host),
     listBenchApps(env),
-    onDocker ? getSiteDiskMb(env, host) : Promise.resolve(0),
-    getBackendMemStats(env),
+    getSiteDiskMb(env, host),
   ]);
 
+  const onDocker = listed.sites.includes(host);
   const order = getOrderByHostname(host);
   const suffix = domainSuffix();
   const kind =
     host === `erp.${suffix}` ? "erp" : order ? "space" : ("unmanaged" as const);
   const q = order ? planQuotas(order.plan) : { ramLimitMb: 0, diskLimitMb: 0 };
-
-  const dockerCount = Math.max(1, listed.sites.length);
-  const ramShares = attributeRamEqual(mem.usedMb, dockerCount);
-  const dockerIndex = listed.sites.indexOf(host);
-  const ramUsedMb =
-    onDocker && dockerIndex >= 0 ? ramShares[dockerIndex] ?? 0 : 0;
+  // Prefer cached order usage — avoid docker stats on every manage page load.
+  const ramUsedMb = order?.ramUsedMb || 0;
 
   const installedSet = new Set(installed);
   const installedApps = installed.map((pkg) => ({
@@ -128,7 +111,7 @@ export async function getSiteDetail(hostname: string): Promise<SiteDetail> {
     );
   }
 
-  const detail: SiteDetail = {
+  return {
     hostname: host,
     slug: slugFromHostname(host),
     deskUrl: `https://${host}`,
@@ -154,8 +137,6 @@ export async function getSiteDetail(hostname: string): Promise<SiteDetail> {
       features: p.features,
     })),
   };
-  detailCache.set(host, { at: Date.now(), detail });
-  return detail;
 }
 
 export async function manageInstallApp(
