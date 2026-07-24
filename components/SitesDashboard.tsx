@@ -20,7 +20,6 @@ const APP_LABELS: Record<string, string> = {
   zatgo_space: "ZatGo Space",
 };
 
-/** Hide internal/platform packages from the customer view. */
 const HIDDEN_APPS = new Set(["frappe", "zatgo_space"]);
 
 function appLabel(pkg: string): string {
@@ -31,129 +30,186 @@ function visibleApps(apps: string[]): string[] {
   return apps.filter((a) => !HIDDEN_APPS.has(a)).map(appLabel);
 }
 
-function ProgressBar({ value }: { value: number }) {
+/* ── Design helpers ── */
+const card: React.CSSProperties = {
+  background: "var(--sp-surface)",
+  border: "1px solid var(--sp-border)",
+  borderRadius: "var(--sp-radius)",
+  padding: "20px",
+};
+
+function StatusBadge({ status }: { status?: string }) {
+  const s = String(status || "").toLowerCase();
+  let bg = "rgba(100,116,139,.15)";
+  let color = "var(--sp-muted)";
+  let pulse = false;
+
+  if (["active", "healthy", "ready"].includes(s)) {
+    bg = "rgba(34,197,94,.12)";
+    color = "#22c55e";
+  } else if (["provisioning", "setting up", "installing"].includes(s)) {
+    bg = "rgba(59,130,246,.12)";
+    color = "#3b82f6";
+    pulse = true;
+  } else if (["suspended", "paused"].includes(s)) {
+    bg = "rgba(245,158,11,.12)";
+    color = "#f59e0b";
+  } else if (["failed", "error"].includes(s)) {
+    bg = "rgba(239,68,68,.12)";
+    color = "#ef4444";
+  }
+
   return (
-    <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--space-ink)]/10">
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 5,
+        padding: "3px 10px",
+        borderRadius: 20,
+        fontSize: "0.72rem",
+        fontWeight: 600,
+        background: bg,
+        color,
+        letterSpacing: "0.03em",
+        whiteSpace: "nowrap",
+      }}
+    >
+      <span
+        style={{
+          width: 6,
+          height: 6,
+          borderRadius: "50%",
+          background: color,
+          flexShrink: 0,
+          animation: pulse ? "sp-pulse 1.4s ease-in-out infinite" : "none",
+        }}
+      />
+      {status}
+      <style>{`@keyframes sp-pulse{0%,100%{opacity:1}50%{opacity:.3}}`}</style>
+    </span>
+  );
+}
+
+function ProgressBar({ value, color = "var(--sp-accent)" }: { value: number; color?: string }) {
+  return (
+    <div
+      style={{
+        height: 5,
+        width: "100%",
+        background: "rgba(255,255,255,.07)",
+        borderRadius: 3,
+        overflow: "hidden",
+      }}
+    >
       <div
-        className="h-full rounded-full bg-[var(--space-accent)] transition-all duration-500"
-        style={{ width: `${Math.min(100, Math.max(0, value))}%` }}
+        style={{
+          height: "100%",
+          width: `${Math.min(100, Math.max(0, value))}%`,
+          background: color,
+          borderRadius: 3,
+          transition: "width .5s ease",
+        }}
       />
     </div>
   );
 }
 
-function SummaryCard({
-  title,
+function StatCard({
+  icon,
+  label,
   value,
   detail,
+  bar,
+  iconBg,
 }: {
-  title: string;
+  icon: React.ReactNode;
+  label: string;
   value: string;
   detail: string;
+  bar?: number;
+  iconBg: string;
 }) {
   return (
-    <div className="rounded-2xl border border-[var(--space-ink)]/10 bg-white/70 p-5 backdrop-blur">
-      <h2 className="text-sm font-semibold tracking-wide text-[var(--space-ink)]/70">{title}</h2>
-      <p className="mt-2 text-2xl font-semibold tabular-nums">{value}</p>
-      <p className="mt-1 text-xs text-[var(--space-ink)]/55">{detail}</p>
+    <div style={{ ...card, display: "flex", flexDirection: "column", gap: 12 }}>
+      <div
+        style={{
+          width: 36,
+          height: 36,
+          borderRadius: 9,
+          background: iconBg,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        {icon}
+      </div>
+      <div>
+        <p style={{ fontSize: "0.72rem", fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", color: "var(--sp-muted)", margin: 0 }}>
+          {label}
+        </p>
+        <p style={{ fontSize: "1.9rem", fontWeight: 700, color: "var(--sp-text)", margin: "4px 0 0", lineHeight: 1 }}>
+          {value}
+        </p>
+        <p style={{ fontSize: "0.75rem", color: "var(--sp-muted)", margin: "4px 0 0" }}>{detail}</p>
+      </div>
+      {bar !== undefined && <ProgressBar value={bar} />}
     </div>
   );
 }
 
-function siteBadge(site: SiteUsageRow): { label: string; className: string } {
-  if (site.kind === "erp") {
-    return {
-      label: "Main ERP",
-      className: "bg-[var(--space-ink)]/10 text-[var(--space-ink)]/70",
-    };
-  }
-  if (site.kind === "space" && site.planTitle) {
-    return {
-      label: site.planTitle,
-      className: "bg-[var(--space-accent-soft)] text-[var(--space-accent)]",
-    };
-  }
-  if (!site.onDocker || site.status === "Provisioning") {
-    return {
-      label: "Setting up",
-      className: "bg-amber-100 text-amber-900",
-    };
-  }
-  return {
-    label: "Ready",
-    className: "bg-[var(--space-accent-soft)] text-[var(--space-accent)]",
-  };
-}
-
-function siteHelpLine(site: SiteUsageRow): string {
-  if (!site.onDocker || site.status === "Provisioning") {
-    return "Your site is still being prepared. This can take several minutes.";
-  }
-  if (site.kind === "erp") {
-    return "Your main company ERP site.";
-  }
-  if (site.inPool && site.planTitle) {
-    return `${site.planTitle} plan · Open Desk to sign in as Administrator.`;
-  }
-  return "Open Desk to sign in as Administrator.";
-}
-
-function SkeletonBlock({ className }: { className?: string }) {
+function SkeletonBlock({ w, h }: { w: string | number; h: string | number }) {
   return (
     <span
-      className={`inline-block animate-pulse rounded-lg bg-[var(--space-ink)]/[0.08] ${className || ""}`}
       aria-hidden
-    />
+      style={{
+        display: "inline-block",
+        width: w,
+        height: h,
+        borderRadius: 6,
+        background: "rgba(255,255,255,.07)",
+        animation: "sp-shimmer 1.4s ease-in-out infinite",
+      }}
+    >
+      <style>{`@keyframes sp-shimmer{0%,100%{opacity:1}50%{opacity:.4}}`}</style>
+    </span>
   );
 }
 
 function SitesSkeleton() {
   return (
-    <div aria-busy="true" aria-live="polite">
-      <p className="mb-4 text-sm text-[var(--space-ink)]/55">Loading your sites…</p>
-      <div className="grid gap-4 sm:grid-cols-3">
+    <div aria-busy="true">
+      <p style={{ fontSize: "0.85rem", color: "var(--sp-muted)", marginBottom: 16 }}>Loading your sites…</p>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: 16, marginBottom: 32 }}>
         {[0, 1, 2].map((i) => (
-          <div
-            key={i}
-            className="rounded-2xl border border-[var(--space-ink)]/10 bg-white/70 p-5 backdrop-blur"
-          >
-            <SkeletonBlock className="h-3 w-16" />
-            <SkeletonBlock className="mt-3 h-8 w-24" />
-            <SkeletonBlock className="mt-2 h-3 w-32" />
-            {i === 1 ? <SkeletonBlock className="mt-3 h-2 w-full rounded-full" /> : null}
+          <div key={i} style={card}>
+            <SkeletonBlock w={32} h={32} />
+            <br /><br />
+            <SkeletonBlock w="60%" h={12} />
+            <br /><br />
+            <SkeletonBlock w="40%" h={28} />
+            {i === 1 && <><br /><br /><SkeletonBlock w="100%" h={5} /></>}
           </div>
         ))}
       </div>
-      <div className="mt-10">
-        <SkeletonBlock className="h-5 w-28" />
-        <ul className="mt-4 space-y-3">
-          {[0, 1, 2, 3].map((i) => (
-            <li
-              key={i}
-              className="rounded-2xl border border-[var(--space-ink)]/10 bg-white/70 p-5 backdrop-blur"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <SkeletonBlock className="h-5 w-48 max-w-full" />
-                  <SkeletonBlock className="mt-2 h-3 w-64 max-w-full" />
-                </div>
-                <SkeletonBlock className="h-6 w-16 shrink-0 rounded-full" />
-              </div>
-              <div className="mt-3 flex flex-wrap gap-1.5">
-                <SkeletonBlock className="h-5 w-14" />
-                <SkeletonBlock className="h-5 w-16" />
-                <SkeletonBlock className="h-5 w-12" />
-              </div>
-              <div className="mt-4 flex items-center justify-between gap-3">
-                <SkeletonBlock className="h-4 w-36" />
-                <SkeletonBlock className="h-7 w-24 rounded-lg" />
-              </div>
-            </li>
-          ))}
-        </ul>
-      </div>
+      {[0, 1, 2].map((i) => (
+        <div key={i} style={{ ...card, marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <SkeletonBlock w={180} h={16} />
+            <br /><SkeletonBlock w={120} h={11} />
+          </div>
+          <SkeletonBlock w={72} h={28} />
+        </div>
+      ))}
     </div>
   );
+}
+
+function siteBadgeStatus(site: SiteUsageRow): string {
+  if (!site.onDocker || site.status === "Provisioning") return "Provisioning";
+  if (site.status === "Suspended") return "Suspended";
+  return "Active";
 }
 
 export function SitesDashboard() {
@@ -176,44 +232,32 @@ export function SitesDashboard() {
     if (data.pool) setPool(data.pool);
     if (data.measured) setMeasured(data.measured);
     if (Array.isArray(data.sites)) setSites(data.sites);
-    if (data.error) {
-      setError("Some site details could not be refreshed. Try again in a moment.");
-    }
+    if (data.error) setError("Some site details could not be refreshed. Try again in a moment.");
   }, []);
 
   const load = useCallback(
     async (opts?: { soft?: boolean; details?: boolean }) => {
       const soft = Boolean(opts?.soft);
       const wantDetails = Boolean(opts?.details);
-      if (soft) {
-        setRefreshing(true);
-      } else {
-        setLoading(true);
-      }
+      if (soft) setRefreshing(true);
+      else setLoading(true);
       setError(null);
-
       try {
-        // Fast path only by default — avoids docker du/list-apps CPU spikes.
         const quick = await fetch("/api/sites?refresh=0", { cache: "no-store" });
         const quickData = await quick.json();
         if (!quickData.ok && (!quickData.sites || quickData.sites.length === 0)) {
-          const msg =
-            /timed out|timeout|unreachable|Connection/i.test(String(quickData.error || ""))
-              ? "Could not reach the server to list sites. Check your connection and try again."
-              : quickData.error || "Could not load your sites. Try again.";
+          const msg = /timed out|timeout|unreachable|Connection/i.test(String(quickData.error || ""))
+            ? "Could not reach the server. Check your connection and try again."
+            : quickData.error || "Could not load your sites. Try again.";
           throw new Error(msg);
         }
         applyPayload(quickData);
         setLoading(false);
-
         if (!quickData.sites?.length && quickData.error) {
-          setError("Could not reach the server to list sites. Try Refresh in a moment.");
+          setError("Could not reach the server. Try Refresh in a moment.");
           return;
         }
-
         if (!wantDetails) return;
-
-        // Live metrics only when user asks (Refresh) — capped + cached server-side.
         setDetailsLoading(true);
         setRefreshing(true);
         const full = await fetch("/api/sites?refresh=1", { cache: "no-store" });
@@ -234,56 +278,95 @@ export function SitesDashboard() {
     [applyPayload],
   );
 
-  useEffect(() => {
-    void load({ details: false });
-  }, [load]);
+  useEffect(() => { void load({ details: false }); }, [load]);
 
   const readyCount = sites.filter((s) => s.onDocker).length;
-  const memPct =
-    measured && measured.ramLimitMb > 0 ? pct(measured.ramUsedMb, measured.ramLimitMb) : 0;
+  const memPct = measured && measured.ramLimitMb > 0 ? pct(measured.ramUsedMb, measured.ramLimitMb) : 0;
+  const diskPct = measured && measured.diskUsedMb > 0 && pool ? pct(measured.diskUsedMb, measured.diskUsedMb + pool.freeDiskMb) : 0;
   const showSkeleton = loading && sites.length === 0;
   const busy = loading || refreshing || detailsLoading;
 
   return (
-    <div className="flex flex-col">
-      <header className="mb-8 flex flex-wrap items-start justify-between gap-4">
+    <div style={{ display: "flex", flexDirection: "column" }}>
+      {/* ── Hero header ── */}
+      <header style={{ marginBottom: 32, display: "flex", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
         <div>
-          <p className="text-sm font-medium tracking-wide text-[var(--space-accent)]">ZatGo</p>
-          <h1 className="mt-1 text-4xl font-semibold tracking-tight text-[var(--space-ink)] sm:text-5xl">
+          <p style={{ fontSize: "0.75rem", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--sp-accent)", margin: 0 }}>
+            ZatGo Space
+          </p>
+          <h1
+            style={{
+              margin: "6px 0 0",
+              fontSize: "clamp(2rem, 5vw, 3.2rem)",
+              fontWeight: 800,
+              letterSpacing: "-0.02em",
+              background: "linear-gradient(135deg, var(--sp-text) 0%, var(--sp-muted) 100%)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              backgroundClip: "text",
+              lineHeight: 1.15,
+            }}
+          >
             Your sites
           </h1>
-          <p className="mt-3 max-w-xl text-base text-[var(--space-ink)]/70">
-            See each site’s address, storage, and apps. Manage apps and plans, or open Desk to
-            sign in.
+          <p style={{ margin: "10px 0 0", maxWidth: 480, fontSize: "0.9rem", color: "var(--sp-muted)", lineHeight: 1.6 }}>
+            See each site's address, storage, and apps. Manage apps and plans, or open Desk to sign in.
           </p>
         </div>
-        <div className="flex shrink-0 flex-col items-end gap-2">
-          <div className="flex flex-wrap gap-2">
-            <Link
-              href="/new"
-              className="rounded-xl border border-[var(--space-ink)]/15 bg-white/70 px-4 py-2 text-sm font-medium hover:bg-white"
-            >
-              New site
-            </Link>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void load({ soft: true, details: true })}
-              className="rounded-xl bg-[var(--space-accent)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-            >
-              {busy && !showSkeleton ? "Updating…" : "Refresh"}
-            </button>
-          </div>
-          {showDevConsole && (
-            <span className="rounded-lg border border-[var(--space-ink)]/15 bg-white/60 px-3 py-1.5 text-xs font-medium text-[var(--space-ink)]/50">
-              Dev logs: bottom-right
-            </span>
-          )}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
+          <Link
+            href="/new"
+            style={{
+              padding: "9px 18px",
+              borderRadius: "var(--sp-radius-sm)",
+              border: "1px solid var(--sp-border)",
+              background: "var(--sp-surface2)",
+              color: "var(--sp-text)",
+              fontSize: "0.83rem",
+              fontWeight: 500,
+            }}
+          >
+            + New site
+          </Link>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void load({ soft: true, details: true })}
+            style={{
+              padding: "9px 18px",
+              borderRadius: "var(--sp-radius-sm)",
+              border: "none",
+              background: busy ? "rgba(124,92,252,.5)" : "linear-gradient(135deg, var(--sp-accent), #6046d4)",
+              color: "#fff",
+              fontSize: "0.83rem",
+              fontWeight: 600,
+              cursor: busy ? "not-allowed" : "pointer",
+              boxShadow: "0 2px 12px rgba(124,92,252,.35)",
+            }}
+          >
+            {busy && !showSkeleton ? "Updating…" : "Refresh"}
+          </button>
         </div>
       </header>
 
+      {/* ── Error banner ── */}
       {error && (
-        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+        <div
+          style={{
+            marginBottom: 20,
+            padding: "12px 16px",
+            borderRadius: "var(--sp-radius-sm)",
+            border: "1px solid rgba(239,68,68,.3)",
+            background: "rgba(239,68,68,.08)",
+            color: "#fca5a5",
+            fontSize: "0.85rem",
+            display: "flex",
+            gap: 8,
+          }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0, marginTop: 1 }}>
+            <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
           {error}
         </div>
       )}
@@ -292,116 +375,158 @@ export function SitesDashboard() {
         <SitesSkeleton />
       ) : (
         <>
+          {/* ── Stat cards ── */}
           {detailsLoading && (
-            <p className="mb-4 text-sm text-[var(--space-ink)]/55">
-              Updating storage and apps…
-            </p>
+            <p style={{ fontSize: "0.82rem", color: "var(--sp-muted)", marginBottom: 12 }}>Updating storage and apps…</p>
           )}
           <div
-            className={`grid gap-4 sm:grid-cols-3 ${detailsLoading ? "opacity-70 transition-opacity" : ""}`}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))",
+              gap: 14,
+              marginBottom: 28,
+              opacity: detailsLoading ? 0.75 : 1,
+              transition: "opacity .3s",
+            }}
           >
-            <SummaryCard
-              title="Sites"
+            <StatCard
+              iconBg="rgba(124,92,252,.15)"
+              icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7c5cfc" strokeWidth="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /></svg>}
+              label="Sites"
               value={String(readyCount)}
               detail={readyCount === 1 ? "Active site" : "Active sites"}
             />
-            <div className="rounded-2xl border border-[var(--space-ink)]/10 bg-white/70 p-5 backdrop-blur">
-              <h2 className="text-sm font-semibold tracking-wide text-[var(--space-ink)]/70">
-                Memory
-              </h2>
-              <p className="mt-2 text-2xl font-semibold tabular-nums">
-                {measured ? formatMb(measured.ramUsedMb) : "—"}
-                {measured && measured.ramLimitMb > 0 ? (
-                  <span className="text-base font-normal text-[var(--space-ink)]/40">
-                    {" "}
-                    / {formatMb(measured.ramLimitMb)}
-                  </span>
-                ) : null}
-              </p>
-              <p className="mt-1 text-xs text-[var(--space-ink)]/55">Shared across all sites</p>
-              <div className="mt-3">
-                <ProgressBar value={memPct} />
-              </div>
-            </div>
-            <SummaryCard
-              title="Storage"
+            <StatCard
+              iconBg="rgba(34,211,238,.12)"
+              icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" strokeWidth="2"><rect x="2" y="4" width="20" height="16" rx="2" /><line x1="6" y1="4" x2="6" y2="20" /><line x1="10" y1="4" x2="10" y2="20" /><line x1="14" y1="4" x2="14" y2="20" /><line x1="18" y1="4" x2="18" y2="20" /></svg>}
+              label="Memory"
+              value={measured ? formatMb(measured.ramUsedMb) : "—"}
+              detail={measured && measured.ramLimitMb > 0 ? `of ${formatMb(measured.ramLimitMb)} total` : "Shared across all sites"}
+              bar={memPct}
+            />
+            <StatCard
+              iconBg="rgba(34,197,94,.12)"
+              icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg>}
+              label="Storage"
               value={measured ? formatMb(measured.diskUsedMb) : "—"}
               detail="Total used by your sites"
+              bar={diskPct}
             />
           </div>
 
           {pool && pool.siteCount > 0 && (
-            <p className="mt-4 text-sm text-[var(--space-ink)]/60">
-              Plan capacity left: {formatMb(pool.freeRamMb)} memory · {formatMb(pool.freeDiskMb)}{" "}
-              storage
+            <p style={{ fontSize: "0.78rem", color: "var(--sp-muted)", marginBottom: 20 }}>
+              Plan capacity left: {formatMb(pool.freeRamMb)} memory · {formatMb(pool.freeDiskMb)} storage
             </p>
           )}
 
-          <section className={`mt-10 ${detailsLoading ? "opacity-80 transition-opacity" : ""}`}>
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-lg font-semibold">All sites</h2>
-              {detailsLoading ? (
-                <span className="text-xs text-[var(--space-ink)]/45">Updating details…</span>
-              ) : null}
+          {/* ── Sites list ── */}
+          <section style={{ opacity: detailsLoading ? 0.85 : 1, transition: "opacity .3s" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+              <h2 style={{ fontSize: "1rem", fontWeight: 700, color: "var(--sp-text)", margin: 0 }}>
+                All sites
+                <span style={{ marginLeft: 10, padding: "2px 9px", borderRadius: 20, fontSize: "0.72rem", background: "var(--sp-surface2)", border: "1px solid var(--sp-border)", color: "var(--sp-muted)", fontWeight: 500 }}>
+                  {sites.length}
+                </span>
+              </h2>
+              {detailsLoading && (
+                <span style={{ fontSize: "0.76rem", color: "var(--sp-muted)" }}>Updating details…</span>
+              )}
             </div>
+
             {sites.length === 0 ? (
-              <div className="mt-4 rounded-2xl border border-dashed border-[var(--space-ink)]/20 bg-white/40 px-6 py-10 text-center">
-                <p className="text-sm text-[var(--space-ink)]/65">You don’t have any sites yet.</p>
+              <div
+                style={{
+                  ...card,
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  padding: "56px 24px",
+                  gap: 12,
+                  textAlign: "center",
+                }}
+              >
+                <div
+                  style={{
+                    width: 56,
+                    height: 56,
+                    borderRadius: "50%",
+                    background: "var(--sp-surface2)",
+                    border: "1px solid var(--sp-border)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--sp-muted)" strokeWidth="1.5"><circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></svg>
+                </div>
+                <p style={{ fontWeight: 600, color: "var(--sp-text)", margin: 0 }}>No sites yet</p>
+                <p style={{ fontSize: "0.84rem", color: "var(--sp-muted)", margin: 0 }}>Create your first site to get started.</p>
                 <Link
                   href="/new"
-                  className="mt-4 inline-block text-sm font-medium text-[var(--space-accent)] underline-offset-2 hover:underline"
+                  style={{
+                    marginTop: 8,
+                    padding: "9px 20px",
+                    borderRadius: "var(--sp-radius-sm)",
+                    background: "linear-gradient(135deg, var(--sp-accent), #6046d4)",
+                    color: "#fff",
+                    fontSize: "0.83rem",
+                    fontWeight: 600,
+                  }}
                 >
-                  Create your first site
+                  Create site
                 </Link>
               </div>
             ) : (
-              <ul className="mt-4 space-y-3">
+              <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 12 }}>
                 {sites.map((site) => {
-                  const badge = siteBadge(site);
                   const apps = visibleApps(site.apps || []);
                   const hasPlanLimits = site.inPool && site.diskLimitMb > 0;
+                  const diskPctSite = hasPlanLimits ? pct(site.diskUsedMb, site.diskLimitMb) : 0;
+                  const status = siteBadgeStatus(site);
+
                   return (
-                    <li
-                      key={site.name}
-                      className="rounded-2xl border border-[var(--space-ink)]/10 bg-white/70 p-5 backdrop-blur"
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="min-w-0">
+                    <li key={site.name} style={card}>
+                      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+                        <div style={{ minWidth: 0, flex: 1 }}>
                           <a
                             href={site.deskUrl || `https://${site.hostname}`}
                             target="_blank"
                             rel="noreferrer"
-                            className="break-all text-base font-semibold text-[var(--space-ink)] hover:text-[var(--space-accent)]"
+                            style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--sp-text)", wordBreak: "break-all" }}
                           >
                             {site.hostname}
                           </a>
-                          <p className="mt-1 text-sm text-[var(--space-ink)]/60">
-                            {siteHelpLine(site)}
+                          <p style={{ margin: "4px 0 0", fontSize: "0.8rem", color: "var(--sp-muted)" }}>
+                            {site.planTitle ? `${site.planTitle} plan` : site.kind === "erp" ? "Main company ERP" : "Open Desk to sign in."}
                           </p>
                         </div>
-                        <span
-                          className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium ${badge.className}`}
-                        >
-                          {badge.label}
-                        </span>
+                        <StatusBadge status={status} />
                       </div>
 
-                      {detailsLoading && (site.apps || []).length === 0 ? (
-                        <div className="mt-3 flex flex-wrap gap-1.5" aria-hidden>
-                          <SkeletonBlock className="h-5 w-14" />
-                          <SkeletonBlock className="h-5 w-16" />
-                          <SkeletonBlock className="h-5 w-12" />
+                      {/* App pills */}
+                      {detailsLoading && apps.length === 0 ? (
+                        <div style={{ display: "flex", gap: 6, marginTop: 12 }}>
+                          <SkeletonBlock w={52} h={20} />
+                          <SkeletonBlock w={60} h={20} />
+                          <SkeletonBlock w={48} h={20} />
                         </div>
                       ) : apps.length > 0 ? (
-                        <div className="mt-3">
-                          <p className="mb-1.5 text-xs font-medium text-[var(--space-ink)]/50">
-                            Apps
-                          </p>
-                          <div className="flex flex-wrap gap-1.5">
+                        <div style={{ marginTop: 12 }}>
+                          <p style={{ fontSize: "0.7rem", fontWeight: 600, color: "var(--sp-muted)", letterSpacing: "0.06em", textTransform: "uppercase", margin: "0 0 6px" }}>Apps</p>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
                             {apps.map((label) => (
                               <span
                                 key={label}
-                                className="rounded-md bg-[var(--space-ink)]/5 px-2 py-0.5 text-xs text-[var(--space-ink)]/80"
+                                style={{
+                                  padding: "2px 10px",
+                                  borderRadius: 20,
+                                  fontSize: "0.72rem",
+                                  fontWeight: 500,
+                                  background: "rgba(255,255,255,.06)",
+                                  border: "1px solid var(--sp-border)",
+                                  color: "var(--sp-text)",
+                                }}
                               >
                                 {label}
                               </span>
@@ -410,39 +535,54 @@ export function SitesDashboard() {
                         </div>
                       ) : null}
 
-                      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                        <p className="text-sm text-[var(--space-ink)]/70">
-                          Storage used:{" "}
-                          {detailsLoading && !site.diskUsedMb ? (
-                            <SkeletonBlock className="inline-block h-4 w-16 align-middle" />
-                          ) : (
-                            <span className="font-medium tabular-nums text-[var(--space-ink)]">
-                              {formatMb(site.diskUsedMb)}
+                      {/* Storage bar */}
+                      {hasPlanLimits && (
+                        <div style={{ marginTop: 14 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
+                            <span style={{ fontSize: "0.75rem", color: "var(--sp-muted)" }}>Storage used</span>
+                            <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--sp-text)" }}>
+                              {detailsLoading && !site.diskUsedMb ? "—" : formatMb(site.diskUsedMb)}
+                              <span style={{ color: "var(--sp-muted)", fontWeight: 400 }}>
+                                {" / "}{formatMb(site.diskLimitMb)}
+                              </span>
                             </span>
-                          )}
-                          {hasPlanLimits ? (
-                            <span className="text-[var(--space-ink)]/45">
-                              {" "}
-                              of {formatMb(site.diskLimitMb)} included
-                            </span>
-                          ) : null}
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          <Link
-                            href={`/sites/${encodeURIComponent(site.slug)}`}
-                            className="rounded-lg border border-[var(--space-ink)]/15 bg-white px-3 py-1.5 text-xs font-medium text-[var(--space-ink)] hover:bg-white"
-                          >
-                            Manage
-                          </Link>
-                          <a
-                            href={site.deskUrl || `https://${site.hostname}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="rounded-lg bg-[var(--space-accent)] px-3 py-1.5 text-xs font-medium text-white"
-                          >
-                            Open Desk
-                          </a>
+                          </div>
+                          <ProgressBar value={diskPctSite} color={diskPctSite > 85 ? "var(--sp-red)" : diskPctSite > 65 ? "var(--sp-yellow)" : "var(--sp-accent)"} />
                         </div>
+                      )}
+
+                      {/* Actions */}
+                      <div style={{ marginTop: 16, display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "flex-end" }}>
+                        <Link
+                          href={`/sites/${encodeURIComponent(site.slug)}`}
+                          style={{
+                            padding: "7px 14px",
+                            borderRadius: 8,
+                            border: "1px solid var(--sp-border)",
+                            background: "var(--sp-surface2)",
+                            color: "var(--sp-text)",
+                            fontSize: "0.78rem",
+                            fontWeight: 500,
+                          }}
+                        >
+                          Manage
+                        </Link>
+                        <a
+                          href={site.deskUrl || `https://${site.hostname}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{
+                            padding: "7px 14px",
+                            borderRadius: 8,
+                            background: "linear-gradient(135deg, var(--sp-accent), #6046d4)",
+                            color: "#fff",
+                            fontSize: "0.78rem",
+                            fontWeight: 600,
+                            boxShadow: "0 2px 8px rgba(124,92,252,.3)",
+                          }}
+                        >
+                          Open Desk ↗
+                        </a>
                       </div>
                     </li>
                   );
