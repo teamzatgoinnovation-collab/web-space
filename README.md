@@ -23,7 +23,7 @@ space-web connects to the **bench via SSH**, not to `erp.zatgo.online` APIs.
 | Provisioning | SSH → `bench new-site` / `install-app` |
 | Optional Frappe dual-write | `SPACE_FRAPPE_SYNC=1` only (legacy) |
 
-## Run
+## Run (local monorepo)
 
 ```bash
 pnpm install
@@ -33,6 +33,23 @@ pnpm --filter @zatgo/space-web dev
 ```
 
 Open http://localhost:3010 · Sites dashboard: http://localhost:3010/sites
+
+## Production (`space.zatgo.online`)
+
+Runs on the DigitalOcean droplet (same host as the Docker bench):
+
+```bash
+# as zatgo
+cd ~/z_apps/web-space
+git pull
+pnpm install --frozen-lockfile || pnpm install
+pnpm build
+# systemd: space-web.service → pnpm start on :3010
+```
+
+Nginx proxies `https://space.zatgo.online` → `127.0.0.1:3010` (more specific than the `*.zatgo.online` ERPNext vhost).
+
+On the droplet use `SPACE_BENCH_ENV=local` so Space talks to Docker directly (no SSH hop).
 
 ## DNS (one-time, Namecheap)
 
