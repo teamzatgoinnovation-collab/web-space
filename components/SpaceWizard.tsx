@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, X as XIcon } from "lucide-react";
 import { DevActivityConsole } from "@/components/DevActivityConsole";
-import { FreeCheckout, type CheckoutSuccess } from "@/components/FreeCheckout";
+import { MoyasarCheckout, type CheckoutSuccess } from "@/components/MoyasarCheckout";
 import { isDevConsoleEnabled } from "@/lib/dev-console";
 import { formatMb } from "@/lib/format";
 import Link from "next/link";
@@ -338,11 +338,7 @@ export function SpaceWizard() {
 
   const onCheckoutSuccess = (result: CheckoutSuccess) => {
     setCheckoutSessionId(result.sessionId);
-    setPaidCard(
-      result.cardLast4
-        ? `${result.cardBrand || "card"} •••• ${result.cardLast4}`
-        : "Paid $0.00",
-    );
+    setPaidCard(result.planTitle);
     void startInstall(result.sessionId);
   };
 
@@ -503,8 +499,8 @@ export function SpaceWizard() {
               <section>
                 <h2 className="text-xl font-semibold text-foreground">Billing plan</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Choose capacity for your site. Checkout uses a Stripe-style card form — Space is free, so you pay
-                  $0.00.
+                  Choose capacity for your site. Free plans activate immediately; paid plans are billed monthly via
+                  Moyasar.
                 </p>
                 {catalog?.pool && (
                   <p className="mt-2 text-xs text-muted-foreground">
@@ -539,10 +535,7 @@ export function SpaceWizard() {
                           <span className="font-semibold text-foreground">{p.title}</span>
                           <span className="text-right text-sm">
                             {listCents > 0 ? (
-                              <>
-                                <span className="text-muted-foreground line-through">{p.mock_price}</span>
-                                <span className="ml-2 font-semibold text-primary">Free</span>
-                              </>
+                              <span className="font-semibold text-primary">{(listCents / 100).toFixed(2)} SAR/mo</span>
                             ) : (
                               <span className="font-semibold text-primary">Free</span>
                             )}
@@ -573,13 +566,11 @@ export function SpaceWizard() {
             {step === 3 && (
               <section>
                 <h2 className="text-xl font-semibold text-foreground">Payment</h2>
-                <p className="mt-1 mb-5 text-sm text-muted-foreground">
-                  Enter card details to start your free subscription. No charge will be made.
-                </p>
+                <p className="mt-1 mb-5 text-sm text-muted-foreground">Enter card details to start your subscription.</p>
                 {(() => {
                   const selected = (catalog?.plans || []).find((p) => p.code === plan);
                   return (
-                    <FreeCheckout
+                    <MoyasarCheckout
                       plan={plan}
                       planTitle={selected?.title || plan}
                       listPriceCents={selected?.priceCents ?? 0}
@@ -589,9 +580,7 @@ export function SpaceWizard() {
                     />
                   );
                 })()}
-                {paidCard && (
-                  <p className="mt-3 text-sm text-primary">Authorized: {paidCard} · $0.00</p>
-                )}
+                {paidCard && <p className="mt-3 text-sm text-primary">Payment confirmed — {paidCard} plan.</p>}
               </section>
             )}
 

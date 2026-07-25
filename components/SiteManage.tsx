@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, ExternalLink, Boxes } from "lucide-react";
 import { formatMb } from "@/lib/format";
 import { SiteUsageGraph } from "@/components/SiteUsageGraph";
-import { FreeCheckout, type CheckoutSuccess } from "@/components/FreeCheckout";
+import { MoyasarCheckout, type CheckoutSuccess } from "@/components/MoyasarCheckout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -273,7 +273,7 @@ export function SiteManage({ slug }: Props) {
 
       {/* ── Plan ── */}
       {showPlan && (
-        <SectionCard title="Plan" subtitle="Upgrade or change the plan. Checkout is free — $0.00 charged.">
+        <SectionCard title="Plan" subtitle="Upgrade or change the plan. Paid plans are billed monthly via Moyasar.">
           <RadioGroup value={selectedPlan} onValueChange={setSelectedPlan} disabled={!!busy} className="gap-2.5">
             {site.plans.map((plan) => {
               const current = site.plan === plan.code;
@@ -292,10 +292,9 @@ export function SiteManage({ slug }: Props) {
                     <div className="flex flex-wrap items-baseline gap-2">
                       <span className="text-[0.95rem] font-bold text-foreground">{plan.title}</span>
                       {(plan.priceCents ?? 0) > 0 ? (
-                        <>
-                          <span className="text-sm text-muted-foreground line-through">{plan.mock_price}</span>
-                          <span className="text-sm font-bold text-emerald-500">Free</span>
-                        </>
+                        <span className="text-sm font-bold text-primary">
+                          {((plan.priceCents ?? 0) / 100).toFixed(2)} SAR/mo
+                        </span>
                       ) : (
                         <span className="text-sm font-bold text-emerald-500">Free</span>
                       )}
@@ -324,7 +323,7 @@ export function SiteManage({ slug }: Props) {
 
           {showCheckout && selectedPlan && selectedPlan !== site.plan && (
             <div className="mt-5">
-              <FreeCheckout
+              <MoyasarCheckout
                 plan={selectedPlan}
                 planTitle={site.plans.find((p) => p.code === selectedPlan)?.title || selectedPlan}
                 listPriceCents={site.plans.find((p) => p.code === selectedPlan)?.priceCents ?? 0}
@@ -336,7 +335,7 @@ export function SiteManage({ slug }: Props) {
                   void runAction(
                     "set-plan",
                     { action: "set-plan", plan: selectedPlan, checkoutSessionId: result.sessionId },
-                    `Plan updated to ${result.planTitle}. Charged $0.00.`,
+                    `Plan updated to ${result.planTitle}.`,
                   );
                 }}
               />

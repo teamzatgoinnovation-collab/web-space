@@ -243,15 +243,15 @@ function benchUserError(stderr: string, fallback: string): string {
   return `${fallback} Try again later.`;
 }
 
-export function manageSetPlan(
+export async function manageSetPlan(
   hostname: string,
   planCode: string,
   checkoutSessionId?: string,
-): { ok: true; plan: string; planTitle: string } | { ok: false; error: string } {
+): Promise<{ ok: true; plan: string; planTitle: string } | { ok: false; error: string }> {
   const host = assertSiteName(hostname);
   if (isDevConsoleEnabled()) sitesLog(`manage: set plan ${planCode} for ${host}`);
 
-  const paid = assertPaidCheckout({
+  const paid = await assertPaidCheckout({
     sessionId: checkoutSessionId,
     plan: planCode,
     purpose: "upgrade",

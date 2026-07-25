@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const paid = assertPaidCheckout({
+  const paid = await assertPaidCheckout({
     sessionId: parsed.data.checkoutSessionId,
     plan: parsed.data.plan,
     purpose: "provision",

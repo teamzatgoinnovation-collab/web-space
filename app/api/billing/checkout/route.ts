@@ -33,14 +33,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Invalid request" }, { status: 400 });
   }
 
-  const result = createCheckoutSession(parsed.data);
+  const result = await createCheckoutSession(parsed.data);
   if (!result.ok) {
     return NextResponse.json({ ok: false, error: result.error }, { status: 400 });
   }
 
-  return NextResponse.json({
-    ok: true,
-    session: result.session,
-    billing: { mode: "free", amountDueCents: 0 },
-  });
+  return NextResponse.json({ ok: true, session: result.session });
 }
