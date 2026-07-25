@@ -173,13 +173,13 @@ export function SiteManage({ slug }: Props) {
         </Alert>
       )}
       {notice && (
-        <Alert className="mb-3.5 border-emerald-500/30 bg-emerald-500/10 text-emerald-400 [&>svg]:text-emerald-400">
-          <AlertDescription className="text-emerald-400">{notice}</AlertDescription>
+        <Alert className="mb-3.5 border-emerald-500/30 bg-emerald-500/10 text-emerald-600 [&>svg]:text-emerald-600">
+          <AlertDescription className="text-emerald-600">{notice}</AlertDescription>
         </Alert>
       )}
       {locked && (
-        <Alert className="mb-3.5 border-amber-500/30 bg-amber-500/10 text-amber-400 [&>svg]:text-amber-400">
-          <AlertDescription className="text-amber-400">
+        <Alert className="mb-3.5 border-amber-500/30 bg-amber-500/10 text-amber-600 [&>svg]:text-amber-600">
+          <AlertDescription className="text-amber-600">
             This site is still setting up. Actions will be available once it is ready.
           </AlertDescription>
         </Alert>
@@ -208,7 +208,7 @@ export function SiteManage({ slug }: Props) {
             {site.installedApps.map((app) => (
               <li
                 key={app.package}
-                className="flex flex-wrap items-center justify-between gap-2.5 rounded-lg border border-border bg-white/4 px-3.5 py-2.5"
+                className="flex flex-wrap items-center justify-between gap-2.5 rounded-lg border border-border bg-muted/50 px-3.5 py-2.5"
               >
                 <div className="flex items-center gap-2.5">
                   <div className="flex size-7 items-center justify-center rounded-lg bg-secondary text-primary">
@@ -284,7 +284,7 @@ export function SiteManage({ slug }: Props) {
                   htmlFor={`plan-${plan.code}`}
                   className={cn(
                     "flex flex-wrap items-start gap-3 rounded-xl border p-3.5 transition-colors",
-                    selected ? "border-primary bg-primary/8" : "border-border bg-white/3",
+                    selected ? "border-primary bg-primary/8" : "border-border bg-muted/40",
                   )}
                 >
                   <RadioGroupItem value={plan.code} id={`plan-${plan.code}`} className="mt-0.5" />
