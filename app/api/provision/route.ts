@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { rateLimitOk } from "@/lib/bench";
 import { assertPaidCheckout } from "@/lib/billing";
-import { frappeControlEnabled, frappeCreateSite } from "@/lib/frappe-space";
+import { frappeControlEnabled, frappeCreateSite, frappeCreateSiteV4 } from "@/lib/frappe-space";
 import { startProvisionJob } from "@/lib/provision";
 
 export const runtime = "nodejs";
@@ -14,6 +14,7 @@ const Body = z.object({
   plan: z.string().min(1),
   checkoutSessionId: z.string().min(8).max(128),
   paymentMethod: z.enum(["Stripe"]).optional(),
+  preferredRegion: z.string().min(1).max(64).optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -51,11 +52,21 @@ export async function POST(req: NextRequest) {
 
   try {
     if (frappeControlEnabled()) {
-      const message = (await frappeCreateSite({
-        site_name: parsed.data.slug,
-        plan: parsed.data.plan,
-        admin_password: parsed.data.adminPassword,
-      })) as { ok?: boolean; data?: { job?: string; site?: string; domain?: string }; error?: string };
+      const useV4 = Boolean(parsed.data.preferredRegion);
+      const message = (
+        useV4
+          ? await frappeCreateSiteV4({
+              site_name: parsed.data.slug,
+              plan: parsed.data.plan,
+              admin_password: parsed.data.adminPassword,
+              preferred_region: parsed.data.preferredRegion,
+            })
+          : await frappeCreateSite({
+              site_name: parsed.data.slug,
+              plan: parsed.data.plan,
+              admin_password: parsed.data.adminPassword,
+            })
+      ) as { ok?: boolean; data?: { job?: string; site?: string; domain?: string }; error?: string };
 
       if (message && message.ok === false) {
         return NextResponse.json(
@@ -70,6 +81,7 @@ export async function POST(req: NextRequest) {
         site: (data as { site?: string })?.site,
         checkoutSessionId: paid.session.id,
         controlPlane: "space",
+        api: useV4 ? "v4" : "v1",
       });
     }
 

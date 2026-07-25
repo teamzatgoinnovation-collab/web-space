@@ -2,9 +2,18 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { ArrowLeft, ExternalLink, Boxes } from "lucide-react";
 import { formatMb } from "@/lib/format";
 import { SiteUsageGraph } from "@/components/SiteUsageGraph";
 import { FreeCheckout, type CheckoutSuccess } from "@/components/FreeCheckout";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 
 type SiteDetail = {
   hostname: string;
@@ -35,74 +44,15 @@ type SiteDetail = {
 
 type Props = { slug: string };
 
-/* ── Shared styles ── */
-const card: React.CSSProperties = {
-  background: "var(--sp-surface)",
-  border: "1px solid var(--sp-border)",
-  borderRadius: "var(--sp-radius)",
-  padding: "22px",
-};
-
-function Btn({
-  children,
-  onClick,
-  disabled,
-  variant = "ghost",
-  size = "md",
-}: {
-  children: React.ReactNode;
-  onClick?: () => void;
-  disabled?: boolean;
-  variant?: "primary" | "ghost" | "danger";
-  size?: "md" | "sm";
-}) {
-  const base: React.CSSProperties = {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-    borderRadius: size === "sm" ? 8 : "var(--sp-radius-sm)",
-    border: "none",
-    cursor: disabled ? "not-allowed" : "pointer",
-    fontFamily: "inherit",
-    fontWeight: 600,
-    fontSize: size === "sm" ? "0.76rem" : "0.83rem",
-    padding: size === "sm" ? "5px 12px" : "9px 18px",
-    transition: "all .15s ease",
-    opacity: disabled ? 0.5 : 1,
-  };
-
-  const variants: Record<string, React.CSSProperties> = {
-    primary: {
-      background: "var(--sp-accent)",
-      color: "#fff",
-      boxShadow: "0 2px 12px rgba(124,92,252,.35)",
-    },
-    ghost: {
-      background: "var(--sp-surface2)",
-      color: "var(--sp-text)",
-      border: "1px solid var(--sp-border)",
-    },
-    danger: {
-      background: "rgba(239,68,68,.1)",
-      color: "var(--sp-red)",
-      border: "1px solid rgba(239,68,68,.25)",
-    },
-  };
-
-  return (
-    <button type="button" onClick={onClick} disabled={disabled} style={{ ...base, ...variants[variant] }}>
-      {children}
-    </button>
-  );
-}
-
 function SectionCard({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
-    <section style={{ ...card, marginTop: 20 }}>
-      <h2 style={{ fontSize: "1rem", fontWeight: 700, color: "var(--sp-text)", margin: 0 }}>{title}</h2>
-      {subtitle && <p style={{ margin: "4px 0 0", fontSize: "0.82rem", color: "var(--sp-muted)" }}>{subtitle}</p>}
-      <div style={{ marginTop: 16 }}>{children}</div>
-    </section>
+    <Card className="mt-5">
+      <CardHeader>
+        <CardTitle className="text-base">{title}</CardTitle>
+        {subtitle && <CardDescription>{subtitle}</CardDescription>}
+      </CardHeader>
+      <CardContent>{children}</CardContent>
+    </Card>
   );
 }
 
@@ -157,17 +107,17 @@ export function SiteManage({ slug }: Props) {
 
   if (loading && !site) {
     return (
-      <div style={{ padding: "60px 0", textAlign: "center" }}>
-        <p style={{ color: "var(--sp-muted)", fontSize: "0.88rem" }}>Loading site…</p>
+      <div className="py-16 text-center">
+        <p className="text-sm text-muted-foreground">Loading site…</p>
       </div>
     );
   }
 
   if (!site) {
     return (
-      <div style={{ padding: "60px 0", textAlign: "center" }}>
-        <p style={{ color: "var(--sp-red)", fontSize: "0.88rem" }}>{error || "Site not found"}</p>
-        <Link href="/" style={{ marginTop: 16, display: "inline-block", color: "var(--sp-accent)", fontSize: "0.85rem" }}>
+      <div className="py-16 text-center">
+        <p className="text-sm text-destructive">{error || "Site not found"}</p>
+        <Link href="/" className="mt-4 inline-block text-sm text-primary hover:underline">
           ← Back to sites
         </Link>
       </div>
@@ -180,83 +130,59 @@ export function SiteManage({ slug }: Props) {
   return (
     <div>
       {/* ── Header ── */}
-      <header style={{ marginBottom: 28 }}>
-        <Link
-          href="/"
-          style={{ fontSize: "0.82rem", fontWeight: 600, color: "var(--sp-accent)", display: "inline-flex", alignItems: "center", gap: 4 }}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
+      <header className="mb-7">
+        <Link href="/" className="inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline">
+          <ArrowLeft className="size-3.5" />
           All sites
         </Link>
-        <p style={{ margin: "12px 0 0", fontSize: "0.73rem", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--sp-accent)" }}>
-          Site management
-        </p>
-        <h1
-          style={{
-            margin: "6px 0 0",
-            fontSize: "clamp(1.6rem, 4vw, 2.4rem)",
-            fontWeight: 800,
-            letterSpacing: "-0.02em",
-            wordBreak: "break-all",
-            color: "#ffffff",
-          }}
-        >
+        <p className="mt-3 text-xs font-bold tracking-[0.1em] text-primary uppercase">Site management</p>
+        <h1 className="mt-1.5 text-[clamp(1.6rem,4vw,2.4rem)] font-extrabold tracking-tight break-all text-foreground">
           {site.hostname}
         </h1>
-        <p style={{ margin: "6px 0 0", fontSize: "0.84rem", color: "var(--sp-muted)" }}>
+        <p className="mt-1.5 text-sm text-muted-foreground">
           Install or remove apps, change plan, clear cache, or update the site schema.
         </p>
-        <div style={{ marginTop: 16, display: "flex", flexWrap: "wrap", gap: 10 }}>
-          <a
-            href={site.deskUrl}
-            target="_blank"
-            rel="noreferrer"
-            style={{
-              padding: "9px 18px",
-              borderRadius: "var(--sp-radius-sm)",
-              background: "var(--sp-accent)",
-              color: "#fff",
-              fontSize: "0.83rem",
-              fontWeight: 600,
-              boxShadow: "0 2px 12px rgba(124,92,252,.35)",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-            }}
-          >
-            Open Desk
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" /></svg>
-          </a>
-          <Btn
+        <div className="mt-4 flex flex-wrap gap-2.5">
+          <Button nativeButton={false} render={
+            <a href={site.deskUrl} target="_blank" rel="noreferrer">
+              Open Desk
+              <ExternalLink className="size-3" />
+            </a>
+          } />
+          <Button
+            variant="secondary"
             disabled={!!busy || locked}
             onClick={() => void runAction("clear-cache", { action: "clear-cache" }, "Site cache cleared.")}
           >
             {busy === "clear-cache" ? "Clearing…" : "Clear cache"}
-          </Btn>
-          <Btn
+          </Button>
+          <Button
+            variant="secondary"
             disabled={!!busy || locked}
             onClick={() => void runAction("migrate", { action: "migrate" }, "Site updated (migrate + clear cache).")}
           >
             {busy === "migrate" ? "Updating…" : "Update site"}
-          </Btn>
+          </Button>
         </div>
       </header>
 
       {/* ── Alerts ── */}
       {error && (
-        <div style={{ marginBottom: 14, padding: "12px 16px", borderRadius: "var(--sp-radius-sm)", border: "1px solid rgba(239,68,68,.3)", background: "rgba(239,68,68,.08)", color: "#fca5a5", fontSize: "0.85rem" }}>
-          {error}
-        </div>
+        <Alert variant="destructive" className="mb-3.5">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
       {notice && (
-        <div style={{ marginBottom: 14, padding: "12px 16px", borderRadius: "var(--sp-radius-sm)", border: "1px solid rgba(34,197,94,.3)", background: "rgba(34,197,94,.08)", color: "#86efac", fontSize: "0.85rem" }}>
-          {notice}
-        </div>
+        <Alert className="mb-3.5 border-emerald-500/30 bg-emerald-500/10 text-emerald-400 [&>svg]:text-emerald-400">
+          <AlertDescription className="text-emerald-400">{notice}</AlertDescription>
+        </Alert>
       )}
       {locked && (
-        <div style={{ marginBottom: 14, padding: "12px 16px", borderRadius: "var(--sp-radius-sm)", border: "1px solid rgba(245,158,11,.3)", background: "rgba(245,158,11,.08)", color: "#fcd34d", fontSize: "0.85rem" }}>
-          This site is still setting up. Actions will be available once it is ready.
-        </div>
+        <Alert className="mb-3.5 border-amber-500/30 bg-amber-500/10 text-amber-400 [&>svg]:text-amber-400">
+          <AlertDescription className="text-amber-400">
+            This site is still setting up. Actions will be available once it is ready.
+          </AlertDescription>
+        </Alert>
       )}
 
       {/* ── Usage ── */}
@@ -274,49 +200,26 @@ export function SiteManage({ slug }: Props) {
       </SectionCard>
 
       {/* ── Installed apps ── */}
-      <SectionCard
-        title="Installed apps"
-        subtitle="Remove an app you no longer need. The framework app stays installed."
-      >
+      <SectionCard title="Installed apps" subtitle="Remove an app you no longer need. The framework app stays installed.">
         {site.installedApps.length === 0 ? (
-          <p style={{ fontSize: "0.84rem", color: "var(--sp-muted)" }}>No apps listed yet.</p>
+          <p className="text-sm text-muted-foreground">No apps listed yet.</p>
         ) : (
-          <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+          <ul className="flex list-none flex-col gap-2 p-0">
             {site.installedApps.map((app) => (
               <li
                 key={app.package}
-                style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: 10,
-                  padding: "10px 14px",
-                  borderRadius: 10,
-                  background: "rgba(255,255,255,.04)",
-                  border: "1px solid var(--sp-border)",
-                }}
+                className="flex flex-wrap items-center justify-between gap-2.5 rounded-lg border border-border bg-white/4 px-3.5 py-2.5"
               >
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <div
-                    style={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: 8,
-                      background: "rgba(124,92,252,.15)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7c5cfc" strokeWidth="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /></svg>
+                <div className="flex items-center gap-2.5">
+                  <div className="flex size-7 items-center justify-center rounded-lg bg-secondary text-primary">
+                    <Boxes className="size-3.5" />
                   </div>
-                  <span style={{ fontSize: "0.88rem", fontWeight: 600, color: "var(--sp-text)" }}>{app.title}</span>
+                  <span className="text-sm font-semibold text-foreground">{app.title}</span>
                 </div>
                 {app.canUninstall ? (
-                  <Btn
+                  <Button
                     size="sm"
-                    variant="danger"
+                    variant="destructive"
                     disabled={!!busy || locked}
                     onClick={() => {
                       if (!window.confirm(`Remove ${app.title} from this site? You can install it again later.`)) return;
@@ -324,9 +227,9 @@ export function SiteManage({ slug }: Props) {
                     }}
                   >
                     {busy === `uninstall:${app.package}` ? "Removing…" : "Uninstall"}
-                  </Btn>
+                  </Button>
                 ) : (
-                  <span style={{ fontSize: "0.72rem", color: "var(--sp-muted)", fontWeight: 500 }}>Required</span>
+                  <span className="text-xs font-medium text-muted-foreground">Required</span>
                 )}
               </li>
             ))}
@@ -335,39 +238,27 @@ export function SiteManage({ slug }: Props) {
       </SectionCard>
 
       {/* ── Install app ── */}
-      <SectionCard
-        title="Install app"
-        subtitle="Choose an app available on the platform and add it to this site."
-      >
+      <SectionCard title="Install app" subtitle="Choose an app available on the platform and add it to this site.">
         {site.availableApps.length === 0 ? (
-          <p style={{ fontSize: "0.84rem", color: "var(--sp-muted)" }}>All available apps are already installed.</p>
+          <p className="text-sm text-muted-foreground">All available apps are already installed.</p>
         ) : (
-          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: 12 }}>
-            <label style={{ minWidth: "12rem", flex: 1 }}>
-              <span style={{ display: "block", fontSize: "0.78rem", color: "var(--sp-muted)", marginBottom: 6, fontWeight: 500 }}>App</span>
-              <select
-                value={selectedInstall}
-                onChange={(e) => setSelectedInstall(e.target.value)}
-                disabled={!!busy || locked}
-                style={{
-                  width: "100%",
-                  padding: "9px 12px",
-                  borderRadius: "var(--sp-radius-sm)",
-                  border: "1px solid var(--sp-border)",
-                  background: "var(--sp-surface2)",
-                  color: "var(--sp-text)",
-                  fontSize: "0.85rem",
-                  fontFamily: "inherit",
-                }}
-              >
-                <option value="">Select an app…</option>
-                {site.availableApps.map((app) => (
-                  <option key={app.package} value={app.package}>{app.title}</option>
-                ))}
-              </select>
-            </label>
-            <Btn
-              variant="primary"
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="min-w-48 flex-1">
+              <Label className="mb-1.5 text-xs text-muted-foreground">App</Label>
+              <Select value={selectedInstall} onValueChange={(v) => setSelectedInstall(v ?? "")} disabled={!!busy || locked}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select an app…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {site.availableApps.map((app) => (
+                    <SelectItem key={app.package} value={app.package}>
+                      {app.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button
               disabled={!selectedInstall || !!busy || locked}
               onClick={() => {
                 const app = site.availableApps.find((a) => a.package === selectedInstall);
@@ -375,89 +266,64 @@ export function SiteManage({ slug }: Props) {
               }}
             >
               {busy === "install" ? "Installing…" : "Install"}
-            </Btn>
+            </Button>
           </div>
         )}
       </SectionCard>
 
       {/* ── Plan ── */}
       {showPlan && (
-        <SectionCard
-          title="Plan"
-          subtitle="Upgrade or change the plan. Checkout is free — $0.00 charged."
-        >
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <SectionCard title="Plan" subtitle="Upgrade or change the plan. Checkout is free — $0.00 charged.">
+          <RadioGroup value={selectedPlan} onValueChange={setSelectedPlan} disabled={!!busy} className="gap-2.5">
             {site.plans.map((plan) => {
               const current = site.plan === plan.code;
               const selected = selectedPlan === plan.code;
               return (
-                <label
+                <Label
                   key={plan.code}
-                  style={{
-                    display: "flex",
-                    flexWrap: "wrap",
-                    alignItems: "flex-start",
-                    gap: 12,
-                    padding: "14px 16px",
-                    borderRadius: 12,
-                    border: selected ? "1px solid var(--sp-accent)" : "1px solid var(--sp-border)",
-                    background: selected ? "rgba(124,92,252,.08)" : "rgba(255,255,255,.03)",
-                    cursor: "pointer",
-                    transition: "all .15s ease",
-                  }}
+                  htmlFor={`plan-${plan.code}`}
+                  className={cn(
+                    "flex flex-wrap items-start gap-3 rounded-xl border p-3.5 transition-colors",
+                    selected ? "border-primary bg-primary/8" : "border-border bg-white/3",
+                  )}
                 >
-                  <input
-                    type="radio"
-                    name="plan"
-                    value={plan.code}
-                    checked={selected}
-                    onChange={() => setSelectedPlan(plan.code)}
-                    disabled={!!busy}
-                    style={{ marginTop: 3, accentColor: "var(--sp-accent)" }}
-                  />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: 8 }}>
-                      <span style={{ fontWeight: 700, color: "var(--sp-text)", fontSize: "0.95rem" }}>{plan.title}</span>
+                  <RadioGroupItem value={plan.code} id={`plan-${plan.code}`} className="mt-0.5" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-baseline gap-2">
+                      <span className="text-[0.95rem] font-bold text-foreground">{plan.title}</span>
                       {(plan.priceCents ?? 0) > 0 ? (
                         <>
-                          <span style={{ fontSize: "0.8rem", color: "var(--sp-muted)", textDecoration: "line-through" }}>{plan.mock_price}</span>
-                          <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--sp-green)" }}>Free</span>
+                          <span className="text-sm text-muted-foreground line-through">{plan.mock_price}</span>
+                          <span className="text-sm font-bold text-emerald-500">Free</span>
                         </>
                       ) : (
-                        <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--sp-green)" }}>Free</span>
+                        <span className="text-sm font-bold text-emerald-500">Free</span>
                       )}
-                      {current && (
-                        <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: "0.68rem", fontWeight: 600, background: "rgba(124,92,252,.15)", color: "var(--sp-accent)" }}>
-                          Current
-                        </span>
-                      )}
+                      {current && <Badge variant="secondary">Current</Badge>}
                     </div>
-                    <p style={{ margin: "4px 0 0", fontSize: "0.78rem", color: "var(--sp-muted)" }}>
+                    <p className="mt-1 text-xs text-muted-foreground">
                       {formatMb(plan.ramLimitMb)} memory · {formatMb(plan.diskLimitMb)} storage
                     </p>
                     {plan.features?.length ? (
-                      <p style={{ margin: "3px 0 0", fontSize: "0.75rem", color: "var(--sp-muted)" }}>
-                        {plan.features.join(" · ")}
-                      </p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">{plan.features.join(" · ")}</p>
                     ) : null}
                   </div>
-                </label>
+                </Label>
               );
             })}
-          </div>
+          </RadioGroup>
 
-          <div style={{ marginTop: 16 }}>
-            <Btn
-              variant="primary"
+          <div className="mt-4">
+            <Button
               disabled={!selectedPlan || selectedPlan === site.plan || !!busy}
               onClick={() => { setError(null); setNotice(null); setShowCheckout(true); }}
             >
               Continue to payment
-            </Btn>
+            </Button>
           </div>
 
           {showCheckout && selectedPlan && selectedPlan !== site.plan && (
-            <div style={{ marginTop: 20 }}>
+            <div className="mt-5">
               <FreeCheckout
                 plan={selectedPlan}
                 planTitle={site.plans.find((p) => p.code === selectedPlan)?.title || selectedPlan}

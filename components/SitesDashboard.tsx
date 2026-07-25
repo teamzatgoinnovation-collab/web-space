@@ -2,10 +2,18 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { Boxes, HardDrive, MemoryStick, AlertCircle, Globe } from "lucide-react";
 import { SitesDevConsole } from "@/components/SitesDevConsole";
 import { formatMb, pct } from "@/lib/format";
 import { isDevConsoleEnabled } from "@/lib/dev-console";
 import type { MeasuredBench, PoolSummary, SiteUsageRow } from "@/lib/sites-usage";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { cn } from "@/lib/utils";
 
 const APP_LABELS: Record<string, string> = {
   frappe: "Framework",
@@ -30,88 +38,20 @@ function visibleApps(apps: string[]): string[] {
   return apps.filter((a) => !HIDDEN_APPS.has(a)).map(appLabel);
 }
 
-/* ── Design helpers ── */
-const card: React.CSSProperties = {
-  background: "var(--sp-surface)",
-  border: "1px solid var(--sp-border)",
-  borderRadius: "var(--sp-radius)",
-  padding: "20px",
+const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
+  active: "default",
+  provisioning: "secondary",
+  suspended: "outline",
+  failed: "destructive",
 };
 
 function StatusBadge({ status }: { status?: string }) {
   const s = String(status || "").toLowerCase();
-  let bg = "rgba(100,116,139,.15)";
-  let color = "var(--sp-muted)";
-  let pulse = false;
-
-  if (["active", "healthy", "ready"].includes(s)) {
-    bg = "rgba(34,197,94,.12)";
-    color = "#22c55e";
-  } else if (["provisioning", "setting up", "installing"].includes(s)) {
-    bg = "rgba(59,130,246,.12)";
-    color = "#3b82f6";
-    pulse = true;
-  } else if (["suspended", "paused"].includes(s)) {
-    bg = "rgba(245,158,11,.12)";
-    color = "#f59e0b";
-  } else if (["failed", "error"].includes(s)) {
-    bg = "rgba(239,68,68,.12)";
-    color = "#ef4444";
-  }
-
+  const variant = STATUS_VARIANT[s] || "secondary";
   return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 5,
-        padding: "3px 10px",
-        borderRadius: 20,
-        fontSize: "0.72rem",
-        fontWeight: 600,
-        background: bg,
-        color,
-        letterSpacing: "0.03em",
-        whiteSpace: "nowrap",
-      }}
-    >
-      <span
-        style={{
-          width: 6,
-          height: 6,
-          borderRadius: "50%",
-          background: color,
-          flexShrink: 0,
-          animation: pulse ? "sp-pulse 1.4s ease-in-out infinite" : "none",
-        }}
-      />
+    <Badge variant={variant} className="whitespace-nowrap">
       {status}
-      <style>{`@keyframes sp-pulse{0%,100%{opacity:1}50%{opacity:.3}}`}</style>
-    </span>
-  );
-}
-
-function ProgressBar({ value, color = "var(--sp-accent)" }: { value: number; color?: string }) {
-  return (
-    <div
-      style={{
-        height: 5,
-        width: "100%",
-        background: "rgba(255,255,255,.07)",
-        borderRadius: 3,
-        overflow: "hidden",
-      }}
-    >
-      <div
-        style={{
-          height: "100%",
-          width: `${Math.min(100, Math.max(0, value))}%`,
-          background: color,
-          borderRadius: 3,
-          transition: "width .5s ease",
-        }}
-      />
-    </div>
+    </Badge>
   );
 }
 
@@ -121,86 +61,54 @@ function StatCard({
   value,
   detail,
   bar,
-  iconBg,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
   detail: string;
   bar?: number;
-  iconBg: string;
 }) {
   return (
-    <div style={{ ...card, display: "flex", flexDirection: "column", gap: 12 }}>
-      <div
-        style={{
-          width: 36,
-          height: 36,
-          borderRadius: 9,
-          background: iconBg,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        {icon}
-      </div>
-      <div>
-        <p style={{ fontSize: "0.72rem", fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", color: "var(--sp-muted)", margin: 0 }}>
-          {label}
-        </p>
-        <p style={{ fontSize: "1.9rem", fontWeight: 700, color: "var(--sp-text)", margin: "4px 0 0", lineHeight: 1 }}>
-          {value}
-        </p>
-        <p style={{ fontSize: "0.75rem", color: "var(--sp-muted)", margin: "4px 0 0" }}>{detail}</p>
-      </div>
-      {bar !== undefined && <ProgressBar value={bar} />}
-    </div>
-  );
-}
-
-function SkeletonBlock({ w, h }: { w: string | number; h: string | number }) {
-  return (
-    <span
-      aria-hidden
-      style={{
-        display: "inline-block",
-        width: w,
-        height: h,
-        borderRadius: 6,
-        background: "rgba(255,255,255,.07)",
-        animation: "sp-shimmer 1.4s ease-in-out infinite",
-      }}
-    >
-      <style>{`@keyframes sp-shimmer{0%,100%{opacity:1}50%{opacity:.4}}`}</style>
-    </span>
+    <Card>
+      <CardContent className="flex flex-col gap-3">
+        <div className="flex size-9 items-center justify-center rounded-lg bg-secondary text-primary">{icon}</div>
+        <div>
+          <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">{label}</p>
+          <p className="mt-1 text-3xl leading-none font-bold text-foreground">{value}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{detail}</p>
+        </div>
+        {bar !== undefined && <Progress value={Math.min(100, Math.max(0, bar))} />}
+      </CardContent>
+    </Card>
   );
 }
 
 function SitesSkeleton() {
   return (
     <div aria-busy="true">
-      <p style={{ fontSize: "0.85rem", color: "var(--sp-muted)", marginBottom: 16 }}>Loading your sites…</p>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: 16, marginBottom: 32 }}>
+      <p className="mb-4 text-sm text-muted-foreground">Loading your sites…</p>
+      <div className="mb-8 grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
         {[0, 1, 2].map((i) => (
-          <div key={i} style={card}>
-            <SkeletonBlock w={32} h={32} />
-            <br /><br />
-            <SkeletonBlock w="60%" h={12} />
-            <br /><br />
-            <SkeletonBlock w="40%" h={28} />
-            {i === 1 && <><br /><br /><SkeletonBlock w="100%" h={5} /></>}
-          </div>
+          <Card key={i}>
+            <CardContent className="flex flex-col gap-3">
+              <Skeleton className="size-8 rounded-lg" />
+              <Skeleton className="h-3 w-3/5" />
+              <Skeleton className="h-7 w-2/5" />
+              {i === 1 && <Skeleton className="h-1.5 w-full" />}
+            </CardContent>
+          </Card>
         ))}
       </div>
       {[0, 1, 2].map((i) => (
-        <div key={i} style={{ ...card, marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div>
-            <SkeletonBlock w={180} h={16} />
-            <br /><SkeletonBlock w={120} h={11} />
-          </div>
-          <SkeletonBlock w={72} h={28} />
-        </div>
+        <Card key={i} className="mb-3">
+          <CardContent className="flex items-center justify-between">
+            <div className="flex flex-col gap-2">
+              <Skeleton className="h-4 w-44" />
+              <Skeleton className="h-2.5 w-28" />
+            </div>
+            <Skeleton className="h-7 w-18" />
+          </CardContent>
+        </Card>
       ))}
     </div>
   );
@@ -287,85 +195,32 @@ export function SitesDashboard() {
   const busy = loading || refreshing || detailsLoading;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column" }}>
+    <div className="flex flex-col">
       {/* ── Hero header ── */}
-      <header style={{ marginBottom: 32, display: "flex", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
+      <header className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p style={{ fontSize: "0.75rem", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--sp-accent)", margin: 0 }}>
-            ZatGo Space
-          </p>
-          <h1
-            style={{
-              margin: "6px 0 0",
-              fontSize: "clamp(2rem, 5vw, 3.2rem)",
-              fontWeight: 800,
-              letterSpacing: "-0.02em",
-              color: "#ffffff",
-              lineHeight: 1.15,
-            }}
-          >
+          <p className="text-xs font-bold tracking-[0.12em] text-primary uppercase">ZatGo Space</p>
+          <h1 className="mt-1.5 text-[clamp(2rem,5vw,3.2rem)] leading-tight font-extrabold tracking-tight text-foreground">
             Your sites
           </h1>
-          <p style={{ margin: "10px 0 0", maxWidth: 480, fontSize: "0.9rem", color: "var(--sp-muted)", lineHeight: 1.6 }}>
-            See each site's address, storage, and apps. Manage apps and plans, or open Desk to sign in.
+          <p className="mt-2.5 max-w-md text-sm leading-relaxed text-muted-foreground">
+            See each site&apos;s address, storage, and apps. Manage apps and plans, or open Desk to sign in.
           </p>
         </div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
-          <Link
-            href="/new"
-            style={{
-              padding: "9px 18px",
-              borderRadius: "var(--sp-radius-sm)",
-              border: "1px solid var(--sp-border)",
-              background: "var(--sp-surface2)",
-              color: "var(--sp-text)",
-              fontSize: "0.83rem",
-              fontWeight: 500,
-            }}
-          >
-            + New site
-          </Link>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void load({ soft: true, details: true })}
-            style={{
-              padding: "9px 18px",
-              borderRadius: "var(--sp-radius-sm)",
-              border: "none",
-              background: busy ? "rgba(99,102,241,.5)" : "var(--sp-accent)",
-              color: "#fff",
-              fontSize: "0.83rem",
-              fontWeight: 600,
-              cursor: busy ? "not-allowed" : "pointer",
-              boxShadow: "0 2px 12px rgba(124,92,252,.35)",
-            }}
-          >
+        <div className="flex flex-wrap items-center gap-2.5">
+          <Button variant="secondary" nativeButton={false} render={<Link href="/new">+ New site</Link>} />
+          <Button disabled={busy} onClick={() => void load({ soft: true, details: true })}>
             {busy && !showSkeleton ? "Updating…" : "Refresh"}
-          </button>
+          </Button>
         </div>
       </header>
 
       {/* ── Error banner ── */}
       {error && (
-        <div
-          style={{
-            marginBottom: 20,
-            padding: "12px 16px",
-            borderRadius: "var(--sp-radius-sm)",
-            border: "1px solid rgba(239,68,68,.3)",
-            background: "rgba(239,68,68,.08)",
-            color: "#fca5a5",
-            fontSize: "0.85rem",
-            display: "flex",
-            gap: 8,
-          }}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0, marginTop: 1 }}>
-            <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
-          </svg>
-          {error}
-        </div>
+        <Alert variant="destructive" className="mb-5">
+          <AlertCircle />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
 
       {showSkeleton ? (
@@ -373,37 +228,28 @@ export function SitesDashboard() {
       ) : (
         <>
           {/* ── Stat cards ── */}
-          {detailsLoading && (
-            <p style={{ fontSize: "0.82rem", color: "var(--sp-muted)", marginBottom: 12 }}>Updating storage and apps…</p>
-          )}
+          {detailsLoading && <p className="mb-3 text-sm text-muted-foreground">Updating storage and apps…</p>}
           <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))",
-              gap: 14,
-              marginBottom: 28,
-              opacity: detailsLoading ? 0.75 : 1,
-              transition: "opacity .3s",
-            }}
+            className={cn(
+              "mb-7 grid grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-3.5 transition-opacity",
+              detailsLoading && "opacity-75",
+            )}
           >
             <StatCard
-              iconBg="rgba(124,92,252,.15)"
-              icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7c5cfc" strokeWidth="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /></svg>}
+              icon={<Boxes className="size-4.5" />}
               label="Sites"
               value={String(readyCount)}
               detail={readyCount === 1 ? "Active site" : "Active sites"}
             />
             <StatCard
-              iconBg="rgba(34,211,238,.12)"
-              icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" strokeWidth="2"><rect x="2" y="4" width="20" height="16" rx="2" /><line x1="6" y1="4" x2="6" y2="20" /><line x1="10" y1="4" x2="10" y2="20" /><line x1="14" y1="4" x2="14" y2="20" /><line x1="18" y1="4" x2="18" y2="20" /></svg>}
+              icon={<MemoryStick className="size-4.5" />}
               label="Memory"
               value={measured ? formatMb(measured.ramUsedMb) : "—"}
               detail={measured && measured.ramLimitMb > 0 ? `of ${formatMb(measured.ramLimitMb)} total` : "Shared across all sites"}
               bar={memPct}
             />
             <StatCard
-              iconBg="rgba(34,197,94,.12)"
-              icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg>}
+              icon={<HardDrive className="size-4.5" />}
               label="Storage"
               value={measured ? formatMb(measured.diskUsedMb) : "—"}
               detail="Total used by your sites"
@@ -412,70 +258,34 @@ export function SitesDashboard() {
           </div>
 
           {pool && pool.siteCount > 0 && (
-            <p style={{ fontSize: "0.78rem", color: "var(--sp-muted)", marginBottom: 20 }}>
+            <p className="mb-5 text-xs text-muted-foreground">
               Plan capacity left: {formatMb(pool.freeRamMb)} memory · {formatMb(pool.freeDiskMb)} storage
             </p>
           )}
 
           {/* ── Sites list ── */}
-          <section style={{ opacity: detailsLoading ? 0.85 : 1, transition: "opacity .3s" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-              <h2 style={{ fontSize: "1rem", fontWeight: 700, color: "var(--sp-text)", margin: 0 }}>
+          <section className={cn("transition-opacity", detailsLoading && "opacity-85")}>
+            <div className="mb-3.5 flex items-center justify-between">
+              <h2 className="flex items-center gap-2.5 text-base font-bold text-foreground">
                 All sites
-                <span style={{ marginLeft: 10, padding: "2px 9px", borderRadius: 20, fontSize: "0.72rem", background: "var(--sp-surface2)", border: "1px solid var(--sp-border)", color: "var(--sp-muted)", fontWeight: 500 }}>
-                  {sites.length}
-                </span>
+                <Badge variant="secondary">{sites.length}</Badge>
               </h2>
-              {detailsLoading && (
-                <span style={{ fontSize: "0.76rem", color: "var(--sp-muted)" }}>Updating details…</span>
-              )}
+              {detailsLoading && <span className="text-xs text-muted-foreground">Updating details…</span>}
             </div>
 
             {sites.length === 0 ? (
-              <div
-                style={{
-                  ...card,
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  padding: "56px 24px",
-                  gap: 12,
-                  textAlign: "center",
-                }}
-              >
-                <div
-                  style={{
-                    width: 56,
-                    height: 56,
-                    borderRadius: "50%",
-                    background: "var(--sp-surface2)",
-                    border: "1px solid var(--sp-border)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--sp-muted)" strokeWidth="1.5"><circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></svg>
-                </div>
-                <p style={{ fontWeight: 600, color: "var(--sp-text)", margin: 0 }}>No sites yet</p>
-                <p style={{ fontSize: "0.84rem", color: "var(--sp-muted)", margin: 0 }}>Create your first site to get started.</p>
-                <Link
-                  href="/new"
-                  style={{
-                    marginTop: 8,
-                    padding: "9px 20px",
-                    borderRadius: "var(--sp-radius-sm)",
-                    background: "var(--sp-accent)",
-                    color: "#fff",
-                    fontSize: "0.83rem",
-                    fontWeight: 600,
-                  }}
-                >
-                  Create site
-                </Link>
-              </div>
+              <Card>
+                <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
+                  <div className="flex size-14 items-center justify-center rounded-full border border-border bg-secondary">
+                    <Globe className="size-6 text-muted-foreground" />
+                  </div>
+                  <p className="font-semibold text-foreground">No sites yet</p>
+                  <p className="text-sm text-muted-foreground">Create your first site to get started.</p>
+                  <Button className="mt-1" nativeButton={false} render={<Link href="/new">Create site</Link>} />
+                </CardContent>
+              </Card>
             ) : (
-              <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 12 }}>
+              <ul className="flex list-none flex-col gap-3 p-0">
                 {sites.map((site) => {
                   const apps = visibleApps(site.apps || []);
                   const hasPlanLimits = site.inPool && site.diskLimitMb > 0;
@@ -483,105 +293,82 @@ export function SitesDashboard() {
                   const status = siteBadgeStatus(site);
 
                   return (
-                    <li key={site.name} style={card}>
-                      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-                        <div style={{ minWidth: 0, flex: 1 }}>
-                          <a
-                            href={site.deskUrl || `https://${site.hostname}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--sp-text)", wordBreak: "break-all" }}
-                          >
-                            {site.hostname}
-                          </a>
-                          <p style={{ margin: "4px 0 0", fontSize: "0.8rem", color: "var(--sp-muted)" }}>
-                            {site.planTitle ? `${site.planTitle} plan` : site.kind === "erp" ? "Main company ERP" : "Open Desk to sign in."}
-                          </p>
-                        </div>
-                        <StatusBadge status={status} />
-                      </div>
-
-                      {/* App pills */}
-                      {detailsLoading && apps.length === 0 ? (
-                        <div style={{ display: "flex", gap: 6, marginTop: 12 }}>
-                          <SkeletonBlock w={52} h={20} />
-                          <SkeletonBlock w={60} h={20} />
-                          <SkeletonBlock w={48} h={20} />
-                        </div>
-                      ) : apps.length > 0 ? (
-                        <div style={{ marginTop: 12 }}>
-                          <p style={{ fontSize: "0.7rem", fontWeight: 600, color: "var(--sp-muted)", letterSpacing: "0.06em", textTransform: "uppercase", margin: "0 0 6px" }}>Apps</p>
-                          <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-                            {apps.map((label) => (
-                              <span
-                                key={label}
-                                style={{
-                                  padding: "2px 10px",
-                                  borderRadius: 20,
-                                  fontSize: "0.72rem",
-                                  fontWeight: 500,
-                                  background: "rgba(255,255,255,.06)",
-                                  border: "1px solid var(--sp-border)",
-                                  color: "var(--sp-text)",
-                                }}
-                              >
-                                {label}
-                              </span>
-                            ))}
+                    <Card key={site.name}>
+                      <CardContent>
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <a
+                              href={site.deskUrl || `https://${site.hostname}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-[0.95rem] font-bold break-all text-foreground hover:underline"
+                            >
+                              {site.hostname}
+                            </a>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                              {site.planTitle ? `${site.planTitle} plan` : site.kind === "erp" ? "Main company ERP" : "Open Desk to sign in."}
+                            </p>
                           </div>
+                          <StatusBadge status={status} />
                         </div>
-                      ) : null}
 
-                      {/* Storage bar */}
-                      {hasPlanLimits && (
-                        <div style={{ marginTop: 14 }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
-                            <span style={{ fontSize: "0.75rem", color: "var(--sp-muted)" }}>Storage used</span>
-                            <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--sp-text)" }}>
-                              {detailsLoading && !site.diskUsedMb ? "—" : formatMb(site.diskUsedMb)}
-                              <span style={{ color: "var(--sp-muted)", fontWeight: 400 }}>
-                                {" / "}{formatMb(site.diskLimitMb)}
-                              </span>
-                            </span>
+                        {/* App pills */}
+                        {detailsLoading && apps.length === 0 ? (
+                          <div className="mt-3 flex gap-1.5">
+                            <Skeleton className="h-5 w-13" />
+                            <Skeleton className="h-5 w-15" />
+                            <Skeleton className="h-5 w-12" />
                           </div>
-                          <ProgressBar value={diskPctSite} color={diskPctSite > 85 ? "var(--sp-red)" : diskPctSite > 65 ? "var(--sp-yellow)" : "var(--sp-accent)"} />
-                        </div>
-                      )}
+                        ) : apps.length > 0 ? (
+                          <div className="mt-3">
+                            <p className="mb-1.5 text-xs font-semibold tracking-wide text-muted-foreground uppercase">Apps</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {apps.map((label) => (
+                                <Badge key={label} variant="outline">
+                                  {label}
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
 
-                      {/* Actions */}
-                      <div style={{ marginTop: 16, display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "flex-end" }}>
-                        <Link
-                          href={`/sites/${encodeURIComponent(site.slug)}`}
-                          style={{
-                            padding: "7px 14px",
-                            borderRadius: 8,
-                            border: "1px solid var(--sp-border)",
-                            background: "var(--sp-surface2)",
-                            color: "var(--sp-text)",
-                            fontSize: "0.78rem",
-                            fontWeight: 500,
-                          }}
-                        >
-                          Manage
-                        </Link>
-                        <a
-                          href={site.deskUrl || `https://${site.hostname}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          style={{
-                            padding: "7px 14px",
-                            borderRadius: 8,
-                            background: "var(--sp-accent)",
-                            color: "#fff",
-                            fontSize: "0.78rem",
-                            fontWeight: 600,
-                            boxShadow: "0 2px 8px rgba(124,92,252,.3)",
-                          }}
-                        >
-                          Open Desk ↗
-                        </a>
-                      </div>
-                    </li>
+                        {/* Storage bar */}
+                        {hasPlanLimits && (
+                          <div className="mt-3.5">
+                            <div className="mb-1 flex justify-between">
+                              <span className="text-xs text-muted-foreground">Storage used</span>
+                              <span className="text-xs font-semibold text-foreground">
+                                {detailsLoading && !site.diskUsedMb ? "—" : formatMb(site.diskUsedMb)}
+                                <span className="font-normal text-muted-foreground">
+                                  {" / "}
+                                  {formatMb(site.diskLimitMb)}
+                                </span>
+                              </span>
+                            </div>
+                            <Progress value={diskPctSite} />
+                          </div>
+                        )}
+
+                        {/* Actions */}
+                        <div className="mt-4 flex flex-wrap justify-end gap-2">
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            nativeButton={false}
+                            render={<Link href={`/sites/${encodeURIComponent(site.slug)}`}>Manage</Link>}
+                          />
+                          <Button
+                            size="sm"
+                            nativeButton={false}
+                            render={
+                              <a href={site.deskUrl || `https://${site.hostname}`} target="_blank" rel="noreferrer">
+                                Open Desk ↗
+                              </a>
+                            }
+                          />
+                        </div>
+                      </CardContent>
+                    </Card>
                   );
                 })}
               </ul>

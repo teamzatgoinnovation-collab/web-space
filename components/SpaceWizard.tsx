@@ -2,11 +2,20 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { Check, X as XIcon } from "lucide-react";
 import { DevActivityConsole } from "@/components/DevActivityConsole";
 import { FreeCheckout, type CheckoutSuccess } from "@/components/FreeCheckout";
 import { isDevConsoleEnabled } from "@/lib/dev-console";
 import { formatMb } from "@/lib/format";
 import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Progress } from "@/components/ui/progress";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { cn } from "@/lib/utils";
 
 type Catalog = {
   domainSuffix: string;
@@ -67,46 +76,27 @@ function softPercentForElapsed(elapsedMs: number, typicalMs: number): number {
 function StageIcon({ status }: { status: string }) {
   if (status === "succeeded" || status === "skipped") {
     return (
-      <span
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--space-accent)] text-white"
-        aria-label="Done"
-      >
-        <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" aria-hidden>
-          <path
-            d="M4.5 10.5 8 14l7.5-8"
-            stroke="currentColor"
-            strokeWidth="2.2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground" aria-label="Done">
+        <Check className="size-4" />
       </span>
     );
   }
   if (status === "running") {
     return (
       <span
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-[var(--space-accent)] border-t-transparent animate-spin"
+        className="size-8 shrink-0 animate-spin rounded-full border-2 border-primary border-t-transparent"
         aria-label="In progress"
       />
     );
   }
   if (status === "failed") {
     return (
-      <span
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-600 text-white text-sm font-bold"
-        aria-label="Failed"
-      >
-        !
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-destructive text-sm font-bold text-white" aria-label="Failed">
+        <XIcon className="size-4" />
       </span>
     );
   }
-  return (
-    <span
-      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-[var(--space-ink)]/20"
-      aria-label="Waiting"
-    />
-  );
+  return <span className="size-8 shrink-0 rounded-full border-2 border-border" aria-label="Waiting" />;
 }
 
 function resolveStageStatus(
@@ -152,6 +142,8 @@ export function SpaceWizard() {
   const [confirm, setConfirm] = useState("");
   const [selectedApps, setSelectedApps] = useState<string[]>(["frappe", "erpnext"]);
   const [plan, setPlan] = useState("basic");
+  const [preferredRegion, setPreferredRegion] = useState("");
+  const [regions, setRegions] = useState<{ name?: string; title?: string }[]>([]);
   const [checkoutSessionId, setCheckoutSessionId] = useState<string | null>(null);
   const [paidCard, setPaidCard] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -171,6 +163,12 @@ export function SpaceWizard() {
         if (d.ok) setCatalog(d);
       })
       .catch(() => setError("Failed to load catalog"));
+    void fetch("/api/regions")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.ok && Array.isArray(d.data)) setRegions(d.data);
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -324,6 +322,7 @@ export function SpaceWizard() {
           plan,
           checkoutSessionId: sessionId,
           paymentMethod: "Stripe",
+          ...(preferredRegion ? { preferredRegion } : {}),
         }),
       });
       const data = await res.json();
@@ -335,7 +334,7 @@ export function SpaceWizard() {
     } finally {
       setBusy(false);
     }
-  }, [slug, password, selectedApps, plan]);
+  }, [slug, password, selectedApps, plan, preferredRegion]);
 
   const onCheckoutSuccess = (result: CheckoutSuccess) => {
     setCheckoutSessionId(result.sessionId);
@@ -370,28 +369,21 @@ export function SpaceWizard() {
       <header className="mb-10">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-sm font-medium tracking-wide text-[var(--space-accent)]">ZatGo</p>
-            <h1 className="mt-1 text-4xl font-semibold tracking-tight text-[var(--space-ink)] sm:text-5xl">
-              Space
-            </h1>
+            <p className="text-sm font-medium tracking-wide text-primary">ZatGo</p>
+            <h1 className="mt-1 text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">Space</h1>
           </div>
           <div className="flex shrink-0 flex-col items-end gap-2">
-            <Link
-              href="/"
-              className="rounded-lg border border-[var(--space-ink)]/15 bg-white/60 px-3 py-1.5 text-xs font-medium text-[var(--space-ink)]/70 hover:bg-white"
-            >
-              Your sites
-            </Link>
+            <Button variant="secondary" size="sm" nativeButton={false} render={<Link href="/">Your sites</Link>} />
             {showDevConsole && (
-              <span className="rounded-lg border border-[var(--space-ink)]/15 bg-white/60 px-3 py-1.5 text-xs font-medium text-[var(--space-ink)]/50">
+              <span className="rounded-lg border border-border bg-secondary px-3 py-1.5 text-xs font-medium text-muted-foreground">
                 Dev logs: bottom-right
               </span>
             )}
           </div>
         </div>
-        <p className="mt-3 max-w-xl text-base text-[var(--space-ink)]/70">
-          Create your ERPNext site on a zatgo.online address — choose apps, pick a plan, and open
-          Desk when it’s ready.
+        <p className="mt-3 max-w-xl text-base text-muted-foreground">
+          Create your ERPNext site on a zatgo.online address — choose apps, pick a plan, and open Desk when it&apos;s
+          ready.
         </p>
       </header>
 
@@ -399,20 +391,21 @@ export function SpaceWizard() {
         {STEPS.map((label, i) => (
           <div
             key={label}
-            className={`flex-1 rounded-full py-2 text-center text-xs font-medium sm:text-sm ${
+            className={cn(
+              "flex-1 rounded-full py-2 text-center text-xs font-medium sm:text-sm",
               i === step
-                ? "bg-[var(--space-ink)] text-white"
+                ? "bg-foreground text-background"
                 : i < step
-                  ? "bg-[var(--space-accent-soft)] text-[var(--space-accent)]"
-                  : "bg-white/50 text-[var(--space-ink)]/40"
-            }`}
+                  ? "bg-primary/15 text-primary"
+                  : "bg-secondary text-muted-foreground",
+            )}
           >
             {label}
           </div>
         ))}
       </nav>
 
-      <div className="relative overflow-hidden rounded-2xl border border-[var(--space-ink)]/10 bg-white/70 p-6 shadow-sm backdrop-blur sm:p-8">
+      <Card className="relative overflow-hidden p-6 sm:p-8">
         <AnimatePresence mode="wait">
           <motion.div
             key={step}
@@ -423,43 +416,55 @@ export function SpaceWizard() {
           >
             {step === 0 && (
               <section>
-                <h2 className="text-xl font-semibold">Choose your subdomain</h2>
-                <p className="mt-1 text-sm text-[var(--space-ink)]/60">
-                  Other URLs are set automatically from this name.
-                </p>
-                <label className="mt-6 block text-sm font-medium">Site name</label>
-                <div className="mt-2 flex items-center gap-2 rounded-xl border border-[var(--space-ink)]/15 bg-white px-3 py-2">
+                <h2 className="text-xl font-semibold text-foreground">Choose your subdomain</h2>
+                <p className="mt-1 text-sm text-muted-foreground">Other URLs are set automatically from this name.</p>
+                <Label className="mt-6 block">Site name</Label>
+                <div className="mt-2 flex items-center gap-2 rounded-xl border border-border bg-background px-3 py-2">
                   <input
-                    className="min-w-0 flex-1 bg-transparent outline-none"
+                    className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none"
                     placeholder="acme"
                     value={slug}
                     onChange={(e) => setSlug(e.target.value.toLowerCase())}
                     autoComplete="off"
                     spellCheck={false}
                   />
-                  <span className="shrink-0 text-sm text-[var(--space-ink)]/50">
-                    .{catalog?.domainSuffix || "zatgo.online"}
-                  </span>
+                  <span className="shrink-0 text-sm text-muted-foreground">.{catalog?.domainSuffix || "zatgo.online"}</span>
                 </div>
                 {hostname && (
-                  <ul className="mt-4 space-y-1 text-sm text-[var(--space-ink)]/70">
+                  <ul className="mt-4 space-y-1 text-sm text-muted-foreground">
                     <li>
-                      Desk: <strong className="font-medium">https://{hostname}</strong>
+                      Desk: <strong className="font-medium text-foreground">https://{hostname}</strong>
                     </li>
                     <li>
-                      Site name: <strong className="font-medium">{hostname}</strong>
+                      Site name: <strong className="font-medium text-foreground">{hostname}</strong>
                     </li>
                   </ul>
+                )}
+                {regions.length > 0 && (
+                  <div className="mt-6">
+                    <Label className="mb-2 block">Preferred region (optional)</Label>
+                    <Select value={preferredRegion} onValueChange={(v) => setPreferredRegion(v ?? "")}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Auto (nearest available)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {regions.map((r) => (
+                          <SelectItem key={r.name} value={r.name || ""}>
+                            {r.title || r.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 )}
               </section>
             )}
 
             {step === 1 && (
               <section>
-                <h2 className="text-xl font-semibold">Apps & Administrator</h2>
-                <p className="mt-1 text-sm text-[var(--space-ink)]/60">
-                  Choose which apps to install. Sign-in user is always{" "}
-                  <strong>Administrator</strong>.
+                <h2 className="text-xl font-semibold text-foreground">Apps &amp; Administrator</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Choose which apps to install. Sign-in user is always <strong>Administrator</strong>.
                 </p>
                 <div className="mt-6 grid gap-2 sm:grid-cols-2">
                   {(catalog?.apps || []).map((app) => {
@@ -470,36 +475,25 @@ export function SpaceWizard() {
                         type="button"
                         disabled={app.required || app.package === "frappe"}
                         onClick={() => toggleApp(app.package, app.required)}
-                        className={`rounded-xl border px-4 py-3 text-left text-sm transition ${
-                          on
-                            ? "border-[var(--space-accent)] bg-[var(--space-accent-soft)]"
-                            : "border-[var(--space-ink)]/10 bg-white hover:border-[var(--space-ink)]/25"
-                        }`}
+                        className={cn(
+                          "rounded-xl border px-4 py-3 text-left text-sm transition",
+                          on ? "border-primary bg-primary/10" : "border-border bg-background hover:border-muted-foreground/40",
+                        )}
                       >
-                        <div className="font-medium">{app.title}</div>
-                        <div className="text-xs opacity-60">{app.package}</div>
+                        <div className="font-medium text-foreground">{app.title}</div>
+                        <div className="text-xs text-muted-foreground">{app.package}</div>
                       </button>
                     );
                   })}
                 </div>
                 <div className="mt-6 grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <label className="block text-sm font-medium">Password</label>
-                    <input
-                      type="password"
-                      className="mt-2 w-full rounded-xl border border-[var(--space-ink)]/15 bg-white px-3 py-2 outline-none"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                    />
+                  <div className="grid gap-1.5">
+                    <Label>Password</Label>
+                    <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium">Confirm</label>
-                    <input
-                      type="password"
-                      className="mt-2 w-full rounded-xl border border-[var(--space-ink)]/15 bg-white px-3 py-2 outline-none"
-                      value={confirm}
-                      onChange={(e) => setConfirm(e.target.value)}
-                    />
+                  <div className="grid gap-1.5">
+                    <Label>Confirm</Label>
+                    <Input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
                   </div>
                 </div>
               </section>
@@ -507,25 +501,22 @@ export function SpaceWizard() {
 
             {step === 2 && (
               <section>
-                <h2 className="text-xl font-semibold">Billing plan</h2>
-                <p className="mt-1 text-sm text-[var(--space-ink)]/60">
-                  Choose capacity for your site. Checkout uses a Stripe-style card form — Space is
-                  free, so you pay $0.00.
+                <h2 className="text-xl font-semibold text-foreground">Billing plan</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Choose capacity for your site. Checkout uses a Stripe-style card form — Space is free, so you pay
+                  $0.00.
                 </p>
                 {catalog?.pool && (
-                  <p className="mt-2 text-xs text-[var(--space-ink)]/50">
-                    Available: {formatMb(catalog.pool.freeRamMb)} memory ·{" "}
-                    {formatMb(catalog.pool.freeDiskMb)} storage
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Available: {formatMb(catalog.pool.freeRamMb)} memory · {formatMb(catalog.pool.freeDiskMb)} storage
                   </p>
                 )}
                 <div className="mt-6 grid gap-3">
                   {(catalog?.plans || []).map((p) => {
                     const ram = p.ramLimitMb ?? 0;
                     const disk = p.diskLimitMb ?? 0;
-                    const fitsRam =
-                      !catalog?.pool || catalog.pool.freeRamMb >= ram;
-                    const fitsDisk =
-                      !catalog?.pool || catalog.pool.freeDiskMb >= disk;
+                    const fitsRam = !catalog?.pool || catalog.pool.freeRamMb >= ram;
+                    const fitsDisk = !catalog?.pool || catalog.pool.freeDiskMb >= disk;
                     const fits = fitsRam && fitsDisk;
                     const listCents = p.priceCents ?? 0;
                     return (
@@ -538,42 +529,36 @@ export function SpaceWizard() {
                           setCheckoutSessionId(null);
                           setPaidCard(null);
                         }}
-                        className={`rounded-xl border px-4 py-4 text-left transition ${
-                          plan === p.code
-                            ? "border-[var(--space-accent)] bg-[var(--space-accent-soft)]"
-                            : "border-[var(--space-ink)]/10 bg-white"
-                        } ${!fits ? "cursor-not-allowed opacity-50" : ""}`}
+                        className={cn(
+                          "rounded-xl border px-4 py-4 text-left transition",
+                          plan === p.code ? "border-primary bg-primary/10" : "border-border bg-background",
+                          !fits && "cursor-not-allowed opacity-50",
+                        )}
                       >
                         <div className="flex items-baseline justify-between gap-3">
-                          <span className="font-semibold">{p.title}</span>
+                          <span className="font-semibold text-foreground">{p.title}</span>
                           <span className="text-right text-sm">
                             {listCents > 0 ? (
                               <>
-                                <span className="text-[var(--space-ink)]/40 line-through">
-                                  {p.mock_price}
-                                </span>
-                                <span className="ml-2 font-semibold text-[var(--space-accent)]">
-                                  Free
-                                </span>
+                                <span className="text-muted-foreground line-through">{p.mock_price}</span>
+                                <span className="ml-2 font-semibold text-primary">Free</span>
                               </>
                             ) : (
-                              <span className="font-semibold text-[var(--space-accent)]">
-                                Free
-                              </span>
+                              <span className="font-semibold text-primary">Free</span>
                             )}
                           </span>
                         </div>
                         {(ram > 0 || disk > 0) && (
-                          <p className="mt-1.5 text-sm font-medium text-[var(--space-accent)]">
+                          <p className="mt-1.5 text-sm font-medium text-primary">
                             {formatMb(ram)} RAM · {formatMb(disk)} disk
                           </p>
                         )}
                         {!fits && (
-                          <p className="mt-1 text-xs text-amber-800">
+                          <p className="mt-1 text-xs text-amber-500">
                             Not enough capacity left — pick a smaller plan or free a site
                           </p>
                         )}
-                        <ul className="mt-2 list-inside list-disc text-xs opacity-70">
+                        <ul className="mt-2 list-inside list-disc text-xs text-muted-foreground">
                           {p.features.map((f) => (
                             <li key={f}>{f}</li>
                           ))}
@@ -587,8 +572,8 @@ export function SpaceWizard() {
 
             {step === 3 && (
               <section>
-                <h2 className="text-xl font-semibold">Payment</h2>
-                <p className="mt-1 mb-5 text-sm text-[var(--space-ink)]/60">
+                <h2 className="text-xl font-semibold text-foreground">Payment</h2>
+                <p className="mt-1 mb-5 text-sm text-muted-foreground">
                   Enter card details to start your free subscription. No charge will be made.
                 </p>
                 {(() => {
@@ -605,145 +590,98 @@ export function SpaceWizard() {
                   );
                 })()}
                 {paidCard && (
-                  <p className="mt-3 text-sm text-[var(--space-accent)]">
-                    Authorized: {paidCard} · $0.00
-                  </p>
+                  <p className="mt-3 text-sm text-primary">Authorized: {paidCard} · $0.00</p>
                 )}
               </section>
             )}
 
             {step === 4 && (
               <section>
-                <h2 className="text-xl font-semibold">Installing</h2>
-                <p className="mt-1 text-sm text-[var(--space-ink)]/60">
-                  {hostname
-                    ? `Setting up ${hostname}`
-                    : "We will set up your site and open ERPNext when ready."}
+                <h2 className="text-xl font-semibold text-foreground">Installing</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {hostname ? `Setting up ${hostname}` : "We will set up your site and open ERPNext when ready."}
                 </p>
                 {!jobId && !job && (
-                  <button
-                    type="button"
+                  <Button
                     disabled={busy || !checkoutSessionId}
                     onClick={() => {
                       if (checkoutSessionId) void startInstall(checkoutSessionId);
                       else setStep(3);
                     }}
-                    className="mt-6 rounded-xl bg-[var(--space-accent)] px-5 py-3 text-sm font-medium text-white disabled:opacity-50"
+                    className="mt-6"
                   >
                     {busy ? "Starting…" : "Start installation"}
-                  </button>
+                  </Button>
                 )}
                 {(jobId || job) && (
                   <div className="mt-6 space-y-4">
                     {(!job || job.status === "queued" || job.status === "running") && (
-                      <div className="rounded-xl bg-[var(--space-accent-soft)] px-4 py-3 text-sm text-[var(--space-ink)]">
+                      <div className="rounded-xl bg-primary/10 px-4 py-3 text-sm text-foreground">
                         <div className="flex items-center justify-between gap-3">
                           <span>{activeHint}</span>
-                          <span className="tabular-nums font-semibold text-[var(--space-accent)]">
-                            {overallPercent}%
-                          </span>
+                          <span className="font-semibold text-primary tabular-nums">{overallPercent}%</span>
                         </div>
-                        <div
-                          className="mt-2 h-2 overflow-hidden rounded-full bg-white/70"
-                          role="progressbar"
-                          aria-valuenow={overallPercent}
-                          aria-valuemin={0}
-                          aria-valuemax={100}
-                        >
-                          <div
-                            className="h-full rounded-full bg-[var(--space-accent)] transition-[width] duration-700 ease-out"
-                            style={{ width: `${overallPercent}%` }}
-                          />
-                        </div>
+                        <Progress value={overallPercent} className="mt-2" />
                       </div>
                     )}
                     {job?.status === "succeeded" && (
-                      <p className="rounded-xl bg-[var(--space-accent-soft)] px-4 py-3 text-sm font-medium text-[var(--space-accent)]">
+                      <p className="rounded-xl bg-primary/10 px-4 py-3 text-sm font-medium text-primary">
                         Your site is ready — 100%
                       </p>
                     )}
                     <ol className="space-y-4">
                       {INSTALL_STEPS.map((stepDef, index) => {
                         const status = resolveStageStatus(stepDef.id, index, job, jobId);
-                        const pct = stepPercents[index] ?? 0;
+                        const pctVal = stepPercents[index] ?? 0;
                         return (
                           <li key={stepDef.id} className="flex gap-3 text-sm">
                             <StageIcon status={status} />
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center justify-between gap-2">
                                 <span
-                                  className={
-                                    status === "succeeded"
-                                      ? "font-medium text-[var(--space-ink)]"
-                                      : status === "running"
-                                        ? "font-medium text-[var(--space-accent)]"
-                                        : status === "failed"
-                                          ? "font-medium text-red-700"
-                                          : "text-[var(--space-ink)]/50"
-                                  }
+                                  className={cn(
+                                    status === "succeeded" && "font-medium text-foreground",
+                                    status === "running" && "font-medium text-primary",
+                                    status === "failed" && "font-medium text-destructive",
+                                    status === "pending" && "text-muted-foreground",
+                                  )}
                                 >
                                   {stepDef.label}
                                   {status === "failed" ? " — failed" : ""}
                                 </span>
                                 <span
-                                  className={`tabular-nums text-xs font-semibold ${
-                                    status === "succeeded"
-                                      ? "text-[var(--space-accent)]"
-                                      : status === "running"
-                                        ? "text-[var(--space-accent)]"
-                                        : status === "failed"
-                                          ? "text-red-700"
-                                          : "text-[var(--space-ink)]/35"
-                                  }`}
+                                  className={cn(
+                                    "text-xs font-semibold tabular-nums",
+                                    (status === "succeeded" || status === "running") && "text-primary",
+                                    status === "failed" && "text-destructive",
+                                    status === "pending" && "text-muted-foreground/60",
+                                  )}
                                 >
-                                  {pct}%
+                                  {pctVal}%
                                 </span>
                               </div>
-                              <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[var(--space-ink)]/10">
-                                <div
-                                  className={`h-full rounded-full transition-[width] duration-700 ease-out ${
-                                    status === "failed"
-                                      ? "bg-red-600"
-                                      : "bg-[var(--space-accent)]"
-                                  }`}
-                                  style={{ width: `${pct}%` }}
-                                />
-                              </div>
+                              <Progress value={pctVal} className={cn("mt-1.5 h-1.5", status === "failed" && "[&>div]:bg-destructive")} />
                             </div>
                           </li>
                         );
                       })}
                     </ol>
                     {job?.status === "succeeded" && job.result?.deskUrl && (
-                      <a
-                        href={job.result.deskUrl}
-                        className="inline-flex rounded-xl bg-[var(--space-accent)] px-5 py-3 text-sm font-medium text-white"
-                      >
-                        Open ERPNext login
-                      </a>
+                      <Button nativeButton={false} render={<a href={job.result.deskUrl}>Open ERPNext login</a>} />
                     )}
                     {job?.status === "failed" && (
-                      <div
-                        role="alert"
-                        className="rounded-xl border border-red-200 bg-red-50 px-4 py-4 text-sm text-red-900"
-                      >
-                        <p className="font-semibold">Installation could not finish</p>
-                        {failedStepLabel && (
-                          <p className="mt-1 opacity-80">Stopped at: {failedStepLabel}</p>
-                        )}
-                        <p className="mt-2">
-                          {job.error ||
-                            "Something went wrong while creating your site. Please try again."}
-                        </p>
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={retryInstall}
-                          className="mt-4 rounded-xl bg-red-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-                        >
-                          {busy ? "Starting…" : "Try again"}
-                        </button>
-                      </div>
+                      <Alert variant="destructive">
+                        <AlertDescription>
+                          <p className="font-semibold">Installation could not finish</p>
+                          {failedStepLabel && <p className="mt-1 opacity-80">Stopped at: {failedStepLabel}</p>}
+                          <p className="mt-2">
+                            {job.error || "Something went wrong while creating your site. Please try again."}
+                          </p>
+                          <Button variant="destructive" disabled={busy} onClick={retryInstall} className="mt-3">
+                            {busy ? "Starting…" : "Try again"}
+                          </Button>
+                        </AlertDescription>
+                      </Alert>
                     )}
                   </div>
                 )}
@@ -752,11 +690,12 @@ export function SpaceWizard() {
           </motion.div>
         </AnimatePresence>
 
-        {error && <p className="mt-4 text-sm text-red-700">{error}</p>}
+        {error && <p className="mt-4 text-sm text-destructive">{error}</p>}
 
-        <div className="mt-8 flex justify-between gap-3">
-          <button
+        <CardContent className="mt-8 flex justify-between gap-3 px-0 pb-0">
+          <Button
             type="button"
+            variant="ghost"
             onClick={back}
             disabled={
               step === 0 ||
@@ -764,21 +703,16 @@ export function SpaceWizard() {
               step === 3 ||
               (Boolean(jobId) && job?.status !== "failed" && job?.status !== "succeeded")
             }
-            className="rounded-xl px-4 py-2 text-sm font-medium text-[var(--space-ink)]/70 disabled:opacity-30"
           >
             Back
-          </button>
+          </Button>
           {step < 2 && (
-            <button
-              type="button"
-              onClick={next}
-              className="rounded-xl bg-[var(--space-ink)] px-5 py-2 text-sm font-medium text-white"
-            >
+            <Button type="button" onClick={next}>
               Continue
-            </button>
+            </Button>
           )}
           {step === 2 && (
-            <button
+            <Button
               type="button"
               onClick={() => {
                 setError(null);
@@ -786,13 +720,12 @@ export function SpaceWizard() {
                 setPaidCard(null);
                 setStep(3);
               }}
-              className="rounded-xl bg-[var(--space-ink)] px-5 py-2 text-sm font-medium text-white"
             >
               Continue to payment
-            </button>
+            </Button>
           )}
-        </div>
-      </div>
+        </CardContent>
+      </Card>
       {showDevConsole && <DevActivityConsole jobId={jobId} />}
     </div>
   );

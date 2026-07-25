@@ -21,7 +21,6 @@ space-web connects to the **bench via SSH**, not to `erp.zatgo.online` APIs.
 | Installable apps | Docker `apps/` (`ls apps` via SSH) |
 | Sites dashboard | Docker `sites/` + Space Orders (erp shown, **not** in Space pool) |
 | Provisioning | SSH → `bench new-site` / `install-app` |
-| Optional Frappe dual-write | `SPACE_FRAPPE_SYNC=1` only (legacy) |
 
 ## Run (local monorepo)
 

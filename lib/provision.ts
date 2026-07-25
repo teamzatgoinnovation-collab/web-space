@@ -27,7 +27,6 @@ import {
   createOrder,
   DEFAULT_PLANS,
   getPlan,
-  optionalFrappeNotify,
   updateOrder,
 } from "./control-plane";
 
@@ -75,16 +74,6 @@ async function notifyOrder(
     ...localPatch
   } = patch;
   updateOrder(orderName, localPatch);
-  await optionalFrappeNotify({
-    name: orderName,
-    status: patch.status,
-    job_id: patch.jobId,
-    error_message: patch.errorMessage,
-    admin_password_set: patch.adminPasswordSet ? 1 : undefined,
-    stage: patch.stage,
-    stage_status: patch.stage_status,
-    message: patch.message,
-  });
 }
 
 export function toUserError(raw: string): string {

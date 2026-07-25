@@ -1,6 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export type CheckoutSuccess = {
   sessionId: string;
@@ -120,142 +125,127 @@ export function FreeCheckout({
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-[var(--space-ink)]/10 bg-white shadow-sm">
-      <div className="border-b border-[var(--space-ink)]/8 bg-[var(--space-ink)]/[0.03] px-5 py-4">
+    <Card className="overflow-hidden py-0">
+      <CardHeader className="border-b border-border bg-secondary/40 !py-4">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--space-ink)]/45">
-              Secure checkout
-            </p>
-            <h3 className="mt-1 text-lg font-semibold text-[var(--space-ink)]">
-              Subscribe to {planTitle}
-            </h3>
+            <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Secure checkout</p>
+            <h3 className="mt-1 text-lg font-semibold text-foreground">Subscribe to {planTitle}</h3>
           </div>
           <div className="text-right">
             {listPriceCents > 0 ? (
               <>
-                <p className="text-sm text-[var(--space-ink)]/40 line-through">
-                  {formatUsd(listPriceCents)}/mo
-                </p>
-                <p className="text-base font-semibold tabular-nums text-[var(--space-accent)]">
-                  $0.00 due today
-                </p>
+                <p className="text-sm text-muted-foreground line-through">{formatUsd(listPriceCents)}/mo</p>
+                <p className="text-base font-semibold tabular-nums text-primary">$0.00 due today</p>
               </>
             ) : (
-              <p className="text-base font-semibold tabular-nums text-[var(--space-accent)]">
-                Free
-              </p>
+              <p className="text-base font-semibold tabular-nums text-primary">Free</p>
             )}
           </div>
         </div>
-        <p className="mt-2 text-xs text-[var(--space-ink)]/55">
+        <p className="mt-2 text-xs text-muted-foreground">
           Space billing is free. Card details authorize your subscription — you will not be charged.
         </p>
-      </div>
+      </CardHeader>
 
-      <form onSubmit={pay} className="space-y-3 px-5 py-4">
-        {bootError && (
-          <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">{bootError}</p>
-        )}
-        {error && (
-          <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">{error}</p>
-        )}
+      <CardContent className="py-4">
+        <form onSubmit={pay} className="space-y-3">
+          {bootError && (
+            <Alert variant="destructive">
+              <AlertDescription>{bootError}</AlertDescription>
+            </Alert>
+          )}
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
 
-        <label className="block text-sm">
-          <span className="mb-1 block font-medium text-[var(--space-ink)]/70">Email</span>
-          <input
-            type="email"
-            required
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-xl border border-[var(--space-ink)]/15 bg-white px-3 py-2.5 outline-none focus:border-[var(--space-accent)]"
-            placeholder="you@company.com"
-          />
-        </label>
+          <div className="grid gap-1.5">
+            <Label>Email</Label>
+            <Input
+              type="email"
+              required
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@company.com"
+            />
+          </div>
 
-        <label className="block text-sm">
-          <span className="mb-1 block font-medium text-[var(--space-ink)]/70">Name on card</span>
-          <input
-            type="text"
-            required
-            autoComplete="cc-name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="w-full rounded-xl border border-[var(--space-ink)]/15 bg-white px-3 py-2.5 outline-none focus:border-[var(--space-accent)]"
-            placeholder="Jane Doe"
-          />
-        </label>
+          <div className="grid gap-1.5">
+            <Label>Name on card</Label>
+            <Input
+              type="text"
+              required
+              autoComplete="cc-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Jane Doe"
+            />
+          </div>
 
-        <label className="block text-sm">
-          <span className="mb-1 block font-medium text-[var(--space-ink)]/70">Card number</span>
-          <input
-            type="text"
-            required
-            inputMode="numeric"
-            autoComplete="cc-number"
-            value={card}
-            onChange={(e) => setCard(formatCardInput(e.target.value))}
-            className="w-full rounded-xl border border-[var(--space-ink)]/15 bg-white px-3 py-2.5 font-mono outline-none focus:border-[var(--space-accent)]"
-            placeholder="4242 4242 4242 4242"
-          />
-        </label>
-
-        <div className="grid grid-cols-2 gap-3">
-          <label className="block text-sm">
-            <span className="mb-1 block font-medium text-[var(--space-ink)]/70">Expiry</span>
-            <input
+          <div className="grid gap-1.5">
+            <Label>Card number</Label>
+            <Input
               type="text"
               required
               inputMode="numeric"
-              autoComplete="cc-exp"
-              value={exp}
-              onChange={(e) => {
-                const d = e.target.value.replace(/\D/g, "").slice(0, 4);
-                setExp(d.length > 2 ? `${d.slice(0, 2)}/${d.slice(2)}` : d);
-              }}
-              className="w-full rounded-xl border border-[var(--space-ink)]/15 bg-white px-3 py-2.5 font-mono outline-none focus:border-[var(--space-accent)]"
-              placeholder="MM/YY"
+              autoComplete="cc-number"
+              value={card}
+              onChange={(e) => setCard(formatCardInput(e.target.value))}
+              className="font-mono"
+              placeholder="4242 4242 4242 4242"
             />
-          </label>
-          <label className="block text-sm">
-            <span className="mb-1 block font-medium text-[var(--space-ink)]/70">CVC</span>
-            <input
-              type="password"
-              required
-              inputMode="numeric"
-              autoComplete="cc-csc"
-              value={cvc}
-              onChange={(e) => setCvc(e.target.value.replace(/\D/g, "").slice(0, 4))}
-              className="w-full rounded-xl border border-[var(--space-ink)]/15 bg-white px-3 py-2.5 font-mono outline-none focus:border-[var(--space-accent)]"
-              placeholder="123"
-            />
-          </label>
-        </div>
+          </div>
 
-        <button
-          type="submit"
-          disabled={busy || !sessionId || !!bootError}
-          className="mt-2 w-full rounded-xl bg-[var(--space-accent)] px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
-        >
-          {busy ? "Processing…" : `Pay $0.00 — subscribe to ${planTitle}`}
-        </button>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-1.5">
+              <Label>Expiry</Label>
+              <Input
+                type="text"
+                required
+                inputMode="numeric"
+                autoComplete="cc-exp"
+                value={exp}
+                onChange={(e) => {
+                  const d = e.target.value.replace(/\D/g, "").slice(0, 4);
+                  setExp(d.length > 2 ? `${d.slice(0, 2)}/${d.slice(2)}` : d);
+                }}
+                className="font-mono"
+                placeholder="MM/YY"
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label>CVC</Label>
+              <Input
+                type="password"
+                required
+                inputMode="numeric"
+                autoComplete="cc-csc"
+                value={cvc}
+                onChange={(e) => setCvc(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                className="font-mono"
+                placeholder="123"
+              />
+            </div>
+          </div>
 
-        {onCancel && (
-          <button
-            type="button"
-            disabled={busy}
-            onClick={onCancel}
-            className="w-full rounded-xl border border-[var(--space-ink)]/10 px-4 py-2 text-sm text-[var(--space-ink)]/60"
-          >
-            Cancel
-          </button>
-        )}
+          <Button type="submit" disabled={busy || !sessionId || !!bootError} className="mt-2 w-full">
+            {busy ? "Processing…" : `Pay $0.00 — subscribe to ${planTitle}`}
+          </Button>
 
-        <p className="pt-1 text-center text-[10px] uppercase tracking-wide text-[var(--space-ink)]/35">
-          Stripe-compatible · Free Space billing · Test card 4242…
-        </p>
-      </form>
-    </div>
+          {onCancel && (
+            <Button type="button" variant="outline" disabled={busy} onClick={onCancel} className="w-full">
+              Cancel
+            </Button>
+          )}
+
+          <p className="pt-1 text-center text-[10px] tracking-wide text-muted-foreground uppercase">
+            Stripe-compatible · Free Space billing · Test card 4242…
+          </p>
+        </form>
+      </CardContent>
+    </Card>
   );
 }

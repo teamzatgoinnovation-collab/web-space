@@ -588,34 +588,6 @@ export async function buildCatalog() {
   };
 }
 
-/** Optional dual-write to Frappe — off unless SPACE_FRAPPE_SYNC=1. */
-export function frappeSyncEnabled(): boolean {
-  return process.env.SPACE_FRAPPE_SYNC === "1" || process.env.SPACE_FRAPPE_SYNC === "true";
-}
-
-export async function optionalFrappeNotify(body: Record<string, unknown>) {
-  if (!frappeSyncEnabled()) return;
-  const base = process.env.FRAPPE_BASE_URL?.replace(/\/$/, "");
-  const token = process.env.SPACE_INTERNAL_TOKEN?.trim();
-  if (!base || !token) return;
-  try {
-    await fetch(`${base}/api/method/zatgo_space.api.v1.space.update_order_status`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Space-Token": token,
-        ...(process.env.FRAPPE_API_KEY && process.env.FRAPPE_API_SECRET
-          ? {
-              Authorization: `token ${process.env.FRAPPE_API_KEY}:${process.env.FRAPPE_API_SECRET}`,
-            }
-          : {}),
-      },
-      body: JSON.stringify(body),
-    });
-  } catch {
-    // best-effort
-  }
-}
 
 /** Keep DEFAULT_PLANS export for provision plan validation. */
 export { DEFAULT_PLANS };

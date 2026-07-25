@@ -29,15 +29,7 @@ function Donut({
     <div className="flex flex-col items-center text-center">
       <div className="relative h-28 w-28">
         <svg viewBox="0 0 100 100" className="h-full w-full -rotate-90" aria-hidden>
-          <circle
-            cx="50"
-            cy="50"
-            r={r}
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="10"
-            className="text-[var(--space-ink)]/10"
-          />
+          <circle cx="50" cy="50" r={r} fill="none" stroke="currentColor" strokeWidth="10" className="text-border" />
           <circle
             cx="50"
             cy="50"
@@ -51,13 +43,11 @@ function Donut({
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-lg font-semibold tabular-nums text-[var(--space-ink)]">
-            {Math.round(clamped)}%
-          </span>
+          <span className="text-lg font-semibold text-foreground tabular-nums">{Math.round(clamped)}%</span>
         </div>
       </div>
-      <p className="mt-2 text-sm font-semibold text-[var(--space-ink)]">{label}</p>
-      <p className="mt-0.5 text-xs tabular-nums text-[var(--space-ink)]/55">{detail}</p>
+      <p className="mt-2 text-sm font-semibold text-foreground">{label}</p>
+      <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">{detail}</p>
     </div>
   );
 }
@@ -74,7 +64,7 @@ function BarChart({
   ramLabel: string;
 }) {
   const rows = [
-    { key: "Storage", pct: diskPct, label: diskLabel, fill: "var(--space-accent)" },
+    { key: "Storage", pct: diskPct, label: diskLabel, fill: "var(--primary)" },
     { key: "Memory", pct: ramPct, label: ramLabel, fill: "#3d6b8a" },
   ];
   return (
@@ -82,10 +72,10 @@ function BarChart({
       {rows.map((row) => (
         <div key={row.key}>
           <div className="mb-1.5 flex items-baseline justify-between gap-2 text-xs">
-            <span className="font-medium text-[var(--space-ink)]/70">{row.key}</span>
-            <span className="tabular-nums text-[var(--space-ink)]/50">{row.label}</span>
+            <span className="font-medium text-muted-foreground">{row.key}</span>
+            <span className="text-muted-foreground tabular-nums">{row.label}</span>
           </div>
-          <div className="relative h-8 w-full overflow-hidden rounded-lg bg-[var(--space-ink)]/[0.06]">
+          <div className="relative h-8 w-full overflow-hidden rounded-lg bg-secondary">
             <div
               className="absolute inset-y-0 left-0 rounded-lg transition-[width] duration-700 ease-out"
               style={{
@@ -94,7 +84,7 @@ function BarChart({
                 opacity: 0.85,
               }}
             />
-            <span className="absolute inset-0 flex items-center px-3 text-xs font-semibold tabular-nums text-white mix-blend-difference">
+            <span className="absolute inset-0 flex items-center px-3 text-xs font-semibold text-white tabular-nums mix-blend-difference">
               {Math.round(row.pct)}%
             </span>
           </div>
@@ -129,7 +119,7 @@ export function SiteUsageGraph({
           value={diskLimitMb > 0 ? diskPct : Math.min(100, diskUsedMb > 0 ? 12 : 0)}
           label="Storage"
           detail={diskDetail}
-          color="var(--space-accent)"
+          color="var(--primary)"
         />
         <Donut
           value={ramLimitMb > 0 ? ramPct : Math.min(100, ramUsedMb > 0 ? 12 : 0)}
@@ -138,16 +128,12 @@ export function SiteUsageGraph({
           color="#3d6b8a"
         />
         <div className="flex flex-col items-center text-center">
-          <div className="flex h-28 w-28 flex-col items-center justify-center rounded-full border-[10px] border-[var(--space-ink)]/10">
-            <span className="text-2xl font-semibold tabular-nums text-[var(--space-ink)]">
-              {appCount}
-            </span>
-            <span className="text-[10px] uppercase tracking-wide text-[var(--space-ink)]/45">
-              apps
-            </span>
+          <div className="flex h-28 w-28 flex-col items-center justify-center rounded-full border-[10px] border-border">
+            <span className="text-2xl font-semibold text-foreground tabular-nums">{appCount}</span>
+            <span className="text-[10px] tracking-wide text-muted-foreground uppercase">apps</span>
           </div>
-          <p className="mt-2 text-sm font-semibold text-[var(--space-ink)]">Installed</p>
-          <p className="mt-0.5 text-xs text-[var(--space-ink)]/55">On this site</p>
+          <p className="mt-2 text-sm font-semibold text-foreground">Installed</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">On this site</p>
         </div>
       </div>
       <BarChart
@@ -157,7 +143,7 @@ export function SiteUsageGraph({
         ramLabel={ramDetail}
       />
       {diskLimitMb <= 0 && ramLimitMb <= 0 ? (
-        <p className="mt-3 text-xs text-[var(--space-ink)]/50">
+        <p className="mt-3 text-xs text-muted-foreground">
           Assign a plan to see usage against included storage and memory.
         </p>
       ) : null}
