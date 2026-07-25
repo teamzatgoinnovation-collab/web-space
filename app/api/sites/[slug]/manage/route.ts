@@ -1,12 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { rateLimitOk } from "@/lib/bench";
-import {
-  frappeControlEnabled,
-  frappeDeleteSite,
-  frappeResumeSite,
-  frappeSuspendSite,
-} from "@/lib/frappe-space";
+import { frappeControlEnabled } from "@/lib/frappe-space";
+import { callMethod, FrappeAuthError } from "@/lib/frappe-customer";
+import { getSid } from "@/lib/require-sid";
 import {
   hostnameFromSlug,
   manageClearCache,
@@ -82,23 +79,21 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       frappeControlEnabled() &&
       (body.action === "suspend" || body.action === "resume" || body.action === "delete")
     ) {
-      const call =
-        body.action === "suspend"
-          ? frappeSuspendSite
-          : body.action === "resume"
-            ? frappeResumeSite
-            : frappeDeleteSite;
-      const message = (await call(slug)) as { ok?: boolean; data?: unknown; error?: string };
-      if (message && message.ok === false) {
-        return NextResponse.json(
-          { ok: false, error: message.error || "Action failed" },
-          { status: 400 },
-        );
+      const sid = await getSid();
+      if (!sid) {
+        return NextResponse.json({ ok: false, error: "Not signed in." }, { status: 401 });
       }
+      const method =
+        body.action === "suspend"
+          ? "space.api.v1.space.suspend_site"
+          : body.action === "resume"
+            ? "space.api.v1.space.resume_site"
+            : "space.api.v1.space.delete_site";
+      const data = await callMethod(method, { name: slug }, sid);
       return NextResponse.json({
         ok: true,
         action: body.action,
-        data: message?.data ?? message,
+        data,
         controlPlane: "space",
       });
     }
@@ -134,6 +129,9 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     if (!result.ok) return NextResponse.json(result, { status: 400 });
     return NextResponse.json(result);
   } catch (err) {
+    if (err instanceof FrappeAuthError) {
+      return NextResponse.json({ ok: false, error: err.message }, { status: 401 });
+    }
     return NextResponse.json(
       {
         ok: false,

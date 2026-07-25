@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { frappeControlEnabled, frappeListSites } from "@/lib/frappe-space";
+import { frappeControlEnabled } from "@/lib/frappe-space";
+import { callMethod, FrappeAuthError } from "@/lib/frappe-customer";
+import { getSid } from "@/lib/require-sid";
 import { collectSitesUsage } from "@/lib/sites-usage";
 
 export const runtime = "nodejs";
@@ -9,15 +11,16 @@ export async function GET(req: NextRequest) {
   const refresh = req.nextUrl.searchParams.get("refresh") === "1";
   try {
     if (frappeControlEnabled()) {
-      const message = (await frappeListSites()) as {
-        ok?: boolean;
-        data?: Array<Record<string, unknown>>;
-      };
-      const rows = Array.isArray(message?.data)
-        ? message.data
-        : Array.isArray(message)
-          ? message
-          : [];
+      const sid = await getSid();
+      if (!sid) {
+        return NextResponse.json({ ok: false, error: "Not signed in." }, { status: 401 });
+      }
+      const result = await callMethod<Array<Record<string, unknown>>>(
+        "space.api.v1.space.list_sites",
+        undefined,
+        sid,
+      );
+      const rows = Array.isArray(result) ? result : [];
       const sites = rows.map((r) => {
         const domain = String(r.domain || "");
         const slug = String(r.site_name || r.name || "");
@@ -74,6 +77,9 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (err) {
+    if (err instanceof FrappeAuthError) {
+      return NextResponse.json({ ok: false, error: err.message }, { status: 401 });
+    }
     return NextResponse.json(
       {
         ok: false,

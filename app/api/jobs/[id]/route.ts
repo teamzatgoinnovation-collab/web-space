@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { frappeControlEnabled, frappeGetJob } from "@/lib/frappe-space";
+import { frappeControlEnabled } from "@/lib/frappe-space";
+import { callMethod, FrappeAuthError } from "@/lib/frappe-customer";
+import { getSid } from "@/lib/require-sid";
 import { getJob } from "@/lib/jobs";
 import { isDevConsoleEnabled } from "@/lib/dev-console";
 
@@ -76,19 +78,12 @@ export async function GET(
   const { id } = await ctx.params;
 
   if (frappeControlEnabled()) {
+    const sid = await getSid();
+    if (!sid) {
+      return NextResponse.json({ ok: false, error: "Not signed in." }, { status: 401 });
+    }
     try {
-      const message = (await frappeGetJob(id)) as {
-        ok?: boolean;
-        data?: Record<string, unknown>;
-        error?: string;
-      };
-      if (message && message.ok === false) {
-        return NextResponse.json(
-          { ok: false, error: message.error || "Job not found" },
-          { status: 404 },
-        );
-      }
-      const data = (message?.data || message) as Record<string, unknown>;
+      const data = await callMethod<Record<string, unknown>>("space.api.v1.space.get_job", { name: id }, sid);
       if (!data || typeof data !== "object") {
         return NextResponse.json({ ok: false, error: "Job not found" }, { status: 404 });
       }
@@ -102,6 +97,9 @@ export async function GET(
         dev: isDevConsoleEnabled(),
       });
     } catch (err) {
+      if (err instanceof FrappeAuthError) {
+        return NextResponse.json({ ok: false, error: err.message }, { status: 401 });
+      }
       const msg = err instanceof Error ? err.message : "Job fetch failed";
       if (/not found|does not exist|404/i.test(msg)) {
         return NextResponse.json({ ok: false, error: "Job not found" }, { status: 404 });

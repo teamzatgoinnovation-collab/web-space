@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { rateLimitOk } from "@/lib/bench";
 import { assertPaidCheckout } from "@/lib/billing";
-import { frappeControlEnabled, frappeCreateSite, frappeCreateSiteV4 } from "@/lib/frappe-space";
+import { frappeControlEnabled } from "@/lib/frappe-space";
+import { callMethod, FrappeAuthError } from "@/lib/frappe-customer";
+import { getSid } from "@/lib/require-sid";
 import { startProvisionJob } from "@/lib/provision";
 
 export const runtime = "nodejs";
@@ -52,33 +54,31 @@ export async function POST(req: NextRequest) {
 
   try {
     if (frappeControlEnabled()) {
+      const sid = await getSid();
+      if (!sid) {
+        return NextResponse.json({ ok: false, error: "Login required" }, { status: 401 });
+      }
       const useV4 = Boolean(parsed.data.preferredRegion);
-      const message = (
+      const data = await callMethod<{ job?: string; site?: string; domain?: string }>(
+        useV4 ? "space.api.v4.space.create_site_v4" : "space.api.v1.space.create_site",
         useV4
-          ? await frappeCreateSiteV4({
+          ? {
               site_name: parsed.data.slug,
               plan: parsed.data.plan,
               admin_password: parsed.data.adminPassword,
               preferred_region: parsed.data.preferredRegion,
-            })
-          : await frappeCreateSite({
+            }
+          : {
               site_name: parsed.data.slug,
               plan: parsed.data.plan,
               admin_password: parsed.data.adminPassword,
-            })
-      ) as { ok?: boolean; data?: { job?: string; site?: string; domain?: string }; error?: string };
-
-      if (message && message.ok === false) {
-        return NextResponse.json(
-          { ok: false, error: message.error || "Create failed" },
-          { status: 400 },
-        );
-      }
-      const data = message?.data || (message as { job?: string });
+            },
+        sid,
+      );
       return NextResponse.json({
         ok: true,
         jobId: data?.job,
-        site: (data as { site?: string })?.site,
+        site: data?.site,
         checkoutSessionId: paid.session.id,
         controlPlane: "space",
         api: useV4 ? "v4" : "v1",
@@ -96,6 +96,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: true, jobId, checkoutSessionId: paid.session.id });
   } catch (err) {
+    if (err instanceof FrappeAuthError) {
+      return NextResponse.json({ ok: false, error: err.message }, { status: 401 });
+    }
     return NextResponse.json(
       { ok: false, error: err instanceof Error ? err.message : "Provision failed" },
       { status: 500 },
