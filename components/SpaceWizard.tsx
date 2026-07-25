@@ -29,6 +29,7 @@ type Catalog = {
     features: string[];
     ramLimitMb?: number;
     diskLimitMb?: number;
+    allowed_apps?: { package: string; title: string }[];
   }[];
   pool?: {
     ramPoolMb: number;
@@ -50,7 +51,7 @@ type JobView = {
   result?: { deskUrl?: string; hostname?: string };
 };
 
-const STEPS = ["Site", "Apps", "Plan", "Pay", "Install"] as const;
+const STEPS = ["Site", "Plan", "Apps", "Pay", "Install"] as const;
 
 /** Friendly install checklist — labels only, no ops/workflow secrets. */
 const INSTALL_STEPS = [
@@ -277,21 +278,26 @@ export function SpaceWizard() {
     );
   };
 
+  /** The plan decides which apps are even selectable — narrow the catalog's
+   * full app list down to what the chosen plan allows (plus the always-on core). */
+  const selectedPlan = useMemo(() => catalog?.plans.find((p) => p.code === plan), [catalog, plan]);
+  const scopedApps = useMemo(() => {
+    const allowed = new Set((selectedPlan?.allowed_apps || []).map((a) => a.package));
+    return (catalog?.apps || []).filter((app) => app.required || app.package === "frappe" || allowed.has(app.package));
+  }, [catalog, selectedPlan]);
+
+  // Plan changed (or loaded) — drop any previously-picked app the new plan doesn't allow.
+  useEffect(() => {
+    if (!selectedPlan) return;
+    const allowedPkgs = new Set(scopedApps.map((a) => a.package));
+    setSelectedApps((prev) => prev.filter((p) => allowedPkgs.has(p)));
+  }, [selectedPlan, scopedApps]);
+
   const next = () => {
     setError(null);
     if (step === 0) {
       if (!/^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/.test(slug.trim().toLowerCase())) {
         setError("Enter a valid subdomain (lowercase, numbers, hyphens)");
-        return;
-      }
-    }
-    if (step === 1) {
-      if (password.length < 8) {
-        setError("Administrator password must be at least 8 characters");
-        return;
-      }
-      if (password !== confirm) {
-        setError("Passwords do not match");
         return;
       }
     }
@@ -456,14 +462,15 @@ export function SpaceWizard() {
               </section>
             )}
 
-            {step === 1 && (
+            {step === 2 && (
               <section>
                 <h2 className="text-xl font-semibold text-foreground">Apps &amp; Administrator</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Choose which apps to install. Sign-in user is always <strong>Administrator</strong>.
+                  Choose which apps to install — only apps included in your {selectedPlan?.title || "selected"} plan are
+                  available. Sign-in user is always <strong>Administrator</strong>.
                 </p>
                 <div className="mt-6 grid gap-2 sm:grid-cols-2">
-                  {(catalog?.apps || []).map((app) => {
+                  {scopedApps.map((app) => {
                     const on = selectedApps.includes(app.package);
                     return (
                       <button
@@ -495,7 +502,7 @@ export function SpaceWizard() {
               </section>
             )}
 
-            {step === 2 && (
+            {step === 1 && (
               <section>
                 <h2 className="text-xl font-semibold text-foreground">Billing plan</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
@@ -576,7 +583,7 @@ export function SpaceWizard() {
                       listPriceCents={selected?.priceCents ?? 0}
                       purpose="provision"
                       onSuccess={onCheckoutSuccess}
-                      onCancel={() => setStep(2)}
+                      onCancel={() => setStep(1)}
                     />
                   );
                 })()}
@@ -705,8 +712,14 @@ export function SpaceWizard() {
               type="button"
               onClick={() => {
                 setError(null);
-                setCheckoutSessionId(null);
-                setPaidCard(null);
+                if (password.length < 8) {
+                  setError("Administrator password must be at least 8 characters");
+                  return;
+                }
+                if (password !== confirm) {
+                  setError("Passwords do not match");
+                  return;
+                }
                 setStep(3);
               }}
             >
