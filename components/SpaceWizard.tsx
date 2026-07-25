@@ -32,13 +32,13 @@ type Catalog = {
     allowed_apps?: { package: string; title: string }[];
   }[];
   pool?: {
-    ramPoolMb: number;
-    diskPoolMb: number;
-    allocatedRamMb: number;
-    allocatedDiskMb: number;
-    freeRamMb: number;
-    freeDiskMb: number;
-    siteCount: number;
+    ramPoolMb?: number;
+    diskPoolMb?: number;
+    allocatedRamMb?: number;
+    allocatedDiskMb?: number;
+    freeRamMb?: number;
+    freeDiskMb?: number;
+    siteCount?: number;
   };
   billing?: { mode?: string; message?: string };
 };
@@ -509,7 +509,7 @@ export function SpaceWizard() {
                   Choose capacity for your site. Free plans activate immediately; paid plans are billed monthly via
                   Moyasar.
                 </p>
-                {catalog?.pool && (
+                {catalog?.pool && catalog.pool.freeRamMb != null && catalog.pool.freeDiskMb != null && (
                   <p className="mt-2 text-xs text-muted-foreground">
                     Available: {formatMb(catalog.pool.freeRamMb)} memory · {formatMb(catalog.pool.freeDiskMb)} storage
                   </p>
@@ -518,8 +518,10 @@ export function SpaceWizard() {
                   {(catalog?.plans || []).map((p) => {
                     const ram = p.ramLimitMb ?? 0;
                     const disk = p.diskLimitMb ?? 0;
-                    const fitsRam = !catalog?.pool || catalog.pool.freeRamMb >= ram;
-                    const fitsDisk = !catalog?.pool || catalog.pool.freeDiskMb >= disk;
+                    // Only enforce capacity limits when the catalog actually reports free capacity —
+                    // treat missing/unknown pool numbers as "don't block", never as "zero available".
+                    const fitsRam = catalog?.pool?.freeRamMb == null || catalog.pool.freeRamMb >= ram;
+                    const fitsDisk = catalog?.pool?.freeDiskMb == null || catalog.pool.freeDiskMb >= disk;
                     const fits = fitsRam && fitsDisk;
                     const listCents = p.priceCents ?? 0;
                     return (
