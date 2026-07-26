@@ -208,8 +208,9 @@ export function SitesDashboard() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2.5">
+          <Button nativeButton={false} render={<Link href="/new?plan=pro&trial=1">Try SpaceCloud</Link>} />
           <Button variant="secondary" nativeButton={false} render={<Link href="/new">+ New site</Link>} />
-          <Button disabled={busy} onClick={() => void load({ soft: true, details: true })}>
+          <Button variant="secondary" disabled={busy} onClick={() => void load({ soft: true, details: true })}>
             {busy && !showSkeleton ? "Updating…" : "Refresh"}
           </Button>
         </div>
@@ -280,8 +281,8 @@ export function SitesDashboard() {
                     <Globe className="size-6 text-muted-foreground" />
                   </div>
                   <p className="font-semibold text-foreground">No sites yet</p>
-                  <p className="text-sm text-muted-foreground">Create your first site to get started.</p>
-                  <Button className="mt-1" nativeButton={false} render={<Link href="/new">Create site</Link>} />
+                  <p className="text-sm text-muted-foreground">Try SpaceCloud free for 14 days to get started.</p>
+                  <Button className="mt-1" nativeButton={false} render={<Link href="/new?plan=pro&trial=1">Try SpaceCloud</Link>} />
                 </CardContent>
               </Card>
             ) : (

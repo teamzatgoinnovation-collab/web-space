@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, X as XIcon } from "lucide-react";
 import { DevActivityConsole } from "@/components/DevActivityConsole";
@@ -136,13 +137,15 @@ function resolveStageStatus(
 }
 
 export function SpaceWizard() {
+  const searchParams = useSearchParams();
+  const isTrialFlow = searchParams.get("trial") === "1";
   const [catalog, setCatalog] = useState<Catalog | null>(null);
   const [step, setStep] = useState(0);
   const [slug, setSlug] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [selectedApps, setSelectedApps] = useState<string[]>(["frappe", "erpnext"]);
-  const [plan, setPlan] = useState("basic");
+  const [plan, setPlan] = useState(() => searchParams.get("plan") || "basic");
   const [preferredRegion, setPreferredRegion] = useState("");
   const [regions, setRegions] = useState<{ name?: string; title?: string }[]>([]);
   const [checkoutSessionId, setCheckoutSessionId] = useState<string | null>(null);
@@ -387,6 +390,11 @@ export function SpaceWizard() {
           Create your ERPNext site on a zatgo.online address — choose apps, pick a plan, and open Desk when it&apos;s
           ready.
         </p>
+        {isTrialFlow && (
+          <p className="mt-3 inline-block rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+            🎉 Trying SpaceCloud — pick a site name to start your free trial
+          </p>
+        )}
       </header>
 
       <nav className="mb-8 flex gap-2" aria-label="Steps">

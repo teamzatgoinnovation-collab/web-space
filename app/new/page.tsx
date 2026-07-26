@@ -1,5 +1,10 @@
+import { Suspense } from "react";
 import { SpaceWizard } from "@/components/SpaceWizard";
 
 export default function NewSitePage() {
-  return <SpaceWizard />;
+  return (
+    <Suspense fallback={null}>
+      <SpaceWizard />
+    </Suspense>
+  );
 }
