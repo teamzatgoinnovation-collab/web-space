@@ -41,7 +41,7 @@ function LoginForm() {
   }
 
   return (
-    <div className="mx-auto flex min-h-[70vh] max-w-sm flex-col justify-center">
+    <div className="mx-auto flex min-h-[calc(100dvh-11rem)] max-w-sm flex-col justify-center">
       <div className="mb-8 text-center">
         <p className="text-sm font-medium tracking-wide text-primary">ZatGo</p>
         <h1 className="mt-1 text-3xl font-semibold tracking-tight text-foreground">Sign in</h1>
