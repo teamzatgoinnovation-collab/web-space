@@ -2,7 +2,7 @@
  * Per-customer session client for space-web.
  *
  * Customers sign up / log in with their own Frappe account (role "Space
- * Customer") on space.zatgo.online, then every subsequent call forwards
+ * Customer") on the Space Frappe control plane, then every subsequent call forwards
  * their own Frappe `sid` — this is what lets the backend's
  * customer_for_user()/_ensure_site_access() scope sites, subscriptions,
  * and jobs to the signed-in customer instead of leaking everyone's data
