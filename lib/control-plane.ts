@@ -20,6 +20,7 @@ export type SpacePlan = {
   diskLimitMb: number;
   isActive: boolean;
   sortOrder: number;
+  allowed_apps: { package: string; title: string }[];
 };
 
 export type SpaceOrderStatus = "Draft" | "Provisioning" | "Active" | "Failed";
@@ -72,42 +73,6 @@ type ControlStore = {
 
 const POOL_STATUSES: SpaceOrderStatus[] = ["Draft", "Provisioning", "Active"];
 
-const DEFAULT_PLANS: SpacePlan[] = [
-  {
-    code: "basic",
-    title: "Basic",
-    mock_price: "$0 / mo",
-    priceCents: 0,
-    features: ["1 site", "ERPNext core", "1 GB RAM", "5 GB disk", "Community support"],
-    ramLimitMb: 1024,
-    diskLimitMb: 5120,
-    isActive: true,
-    sortOrder: 1,
-  },
-  {
-    code: "pro",
-    title: "Pro",
-    mock_price: "$49 / mo",
-    priceCents: 4900,
-    features: ["1 site", "ERPNext + HRMS", "3 GB RAM", "15 GB disk", "Priority email support"],
-    ramLimitMb: 3072,
-    diskLimitMb: 15360,
-    isActive: true,
-    sortOrder: 2,
-  },
-  {
-    code: "enterprise",
-    title: "Enterprise",
-    mock_price: "$199 / mo",
-    priceCents: 19900,
-    features: ["Multi-site ready", "Custom apps", "5 GB RAM", "30 GB disk", "Dedicated onboarding"],
-    ramLimitMb: 5120,
-    diskLimitMb: 30720,
-    isActive: true,
-    sortOrder: 3,
-  },
-];
-
 const APP_TITLE_OVERRIDES: Record<string, string> = {
   frappe: "Framework (required)",
   erpnext: "ERPNext",
@@ -121,7 +86,7 @@ const APP_TITLE_OVERRIDES: Record<string, string> = {
 };
 
 /** Platform / ops apps — not offered in the customer wizard. */
-const CATALOG_HIDDEN_APPS = new Set(["zatgo_space"]);
+const CATALOG_HIDDEN_APPS = new Set(["zatgo_space", "zatgo_core", "zatgo_hub", "space", "space_cloud"]);
 
 export function titleForApp(pkg: string): string {
   return (
@@ -129,6 +94,45 @@ export function titleForApp(pkg: string): string {
     pkg.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
   );
 }
+
+const DEFAULT_PLANS: SpacePlan[] = [
+  {
+    code: "basic",
+    title: "Basic",
+    mock_price: "$0 / mo",
+    priceCents: 0,
+    features: ["1 site", "ERPNext core", "1 GB RAM", "5 GB disk", "Community support"],
+    ramLimitMb: 1024,
+    diskLimitMb: 5120,
+    isActive: true,
+    sortOrder: 1,
+    allowed_apps: ["frappe", "erpnext"].map((pkg) => ({ package: pkg, title: titleForApp(pkg) })),
+  },
+  {
+    code: "pro",
+    title: "Pro",
+    mock_price: "$49 / mo",
+    priceCents: 4900,
+    features: ["1 site", "ERPNext + HRMS", "3 GB RAM", "15 GB disk", "Priority email support"],
+    ramLimitMb: 3072,
+    diskLimitMb: 15360,
+    isActive: true,
+    sortOrder: 2,
+    allowed_apps: ["frappe", "erpnext", "hrms"].map((pkg) => ({ package: pkg, title: titleForApp(pkg) })),
+  },
+  {
+    code: "enterprise",
+    title: "Enterprise",
+    mock_price: "$199 / mo",
+    priceCents: 19900,
+    features: ["Multi-site ready", "Custom apps", "5 GB RAM", "30 GB disk", "Dedicated onboarding"],
+    ramLimitMb: 5120,
+    diskLimitMb: 30720,
+    isActive: true,
+    sortOrder: 3,
+    allowed_apps: ["frappe", "erpnext", "hrms", "crm"].map((pkg) => ({ package: pkg, title: titleForApp(pkg) })),
+  },
+];
 
 function controlDir(): string {
   return path.join(process.cwd(), "data", "control");
@@ -189,6 +193,9 @@ function readStore(): ControlStore {
       }
       if (p.mock_price?.includes("(mock)") && seed) {
         p.mock_price = seed.mock_price;
+      }
+      if (!Array.isArray(p.allowed_apps) || p.allowed_apps.length === 0) {
+        p.allowed_apps = seed?.allowed_apps ?? [];
       }
     }
     mem().store = raw;
@@ -569,6 +576,7 @@ export async function buildCatalog() {
       features: p.features,
       ramLimitMb: p.ramLimitMb,
       diskLimitMb: p.diskLimitMb,
+      allowed_apps: p.allowed_apps,
     })),
     billing: {
       provider: "stripe-compatible",
