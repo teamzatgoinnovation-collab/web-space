@@ -43,7 +43,18 @@ function stagesFromProgress(progress: number, status: string) {
   });
 }
 
-function mapFrappeJob(raw: Record<string, unknown>, id: string) {
+const GENERIC_JOB_ERROR = "Something went wrong while setting this up. Please try again, or contact support if this keeps happening.";
+
+/** Customers never see raw tracebacks/internal paths; the full error_log stays
+ * on the Space Deployment Job for support/admin use via Desk. */
+function safeJobError(rawErrorLog: unknown, devConsole: boolean): string {
+	if (devConsole) {
+		return String(rawErrorLog || "Job failed").slice(0, 500);
+	}
+	return GENERIC_JOB_ERROR;
+}
+
+function mapFrappeJob(raw: Record<string, unknown>, id: string, devConsole: boolean) {
   const statusRaw = String(raw.status || "Queued");
   const progress = Number(raw.progress || 0);
   const statusMap: Record<string, string> = {
@@ -61,7 +72,7 @@ function mapFrappeJob(raw: Record<string, unknown>, id: string) {
     id,
     status,
     stages: stagesFromProgress(progress, statusRaw),
-    error: status === "failed" ? String(raw.error_log || "Job failed").slice(0, 500) : undefined,
+    error: status === "failed" ? safeJobError(raw.error_log, devConsole) : undefined,
     result:
       status === "succeeded" && domain
         ? { deskUrl: `https://${domain}`, hostname: domain }
@@ -87,7 +98,7 @@ export async function GET(
       if (!data || typeof data !== "object") {
         return NextResponse.json({ ok: false, error: "Job not found" }, { status: 404 });
       }
-      const job = mapFrappeJob(data, id);
+      const job = mapFrappeJob(data, id, isDevConsoleEnabled());
       return NextResponse.json({
         ok: true,
         job: isDevConsoleEnabled()
