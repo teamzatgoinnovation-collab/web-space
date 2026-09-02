@@ -17,6 +17,10 @@ const Body = z.object({
   checkoutSessionId: z.string().min(8).max(128),
   paymentMethod: z.enum(["Stripe"]).optional(),
   preferredRegion: z.string().min(1).max(64).optional(),
+  companyName: z.string().min(1).max(140).optional(),
+  warehouseName: z.string().min(1).max(140).optional(),
+  adminFullName: z.string().min(1).max(140).optional(),
+  adminEmail: z.string().email().max(140).optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -59,6 +63,12 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: false, error: "Login required" }, { status: 401 });
       }
       const useV4 = Boolean(parsed.data.preferredRegion);
+      const customSetup = {
+        ...(parsed.data.companyName ? { company_name: parsed.data.companyName } : {}),
+        ...(parsed.data.warehouseName ? { warehouse_name: parsed.data.warehouseName } : {}),
+        ...(parsed.data.adminFullName ? { admin_full_name: parsed.data.adminFullName } : {}),
+        ...(parsed.data.adminEmail ? { admin_email: parsed.data.adminEmail } : {}),
+      };
       const data = await callMethod<{ job?: string; site?: string; domain?: string }>(
         useV4 ? "space.api.v4.space.create_site_v4" : "space.api.v1.space.create_site",
         useV4
@@ -67,11 +77,13 @@ export async function POST(req: NextRequest) {
               plan: parsed.data.plan,
               admin_password: parsed.data.adminPassword,
               preferred_region: parsed.data.preferredRegion,
+              ...customSetup,
             }
           : {
               site_name: parsed.data.slug,
               plan: parsed.data.plan,
               admin_password: parsed.data.adminPassword,
+              ...customSetup,
             },
         sid,
       );

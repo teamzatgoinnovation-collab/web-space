@@ -145,6 +145,10 @@ export function SpaceWizard() {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [selectedApps, setSelectedApps] = useState<string[]>(["frappe", "erpnext"]);
+  const [companyName, setCompanyName] = useState("");
+  const [warehouseName, setWarehouseName] = useState("");
+  const [adminFullName, setAdminFullName] = useState("");
+  const [adminEmail, setAdminEmail] = useState("");
   const [plan, setPlan] = useState(() => searchParams.get("plan") || "basic");
   const [preferredRegion, setPreferredRegion] = useState("");
   const [regions, setRegions] = useState<{ name?: string; title?: string }[]>([]);
@@ -304,6 +308,18 @@ export function SpaceWizard() {
         return;
       }
     }
+    if (step === 2) {
+      const hasName = adminFullName.trim().length > 0;
+      const hasEmail = adminEmail.trim().length > 0;
+      if (hasName !== hasEmail) {
+        setError("Enter both your name and email to add a second sign-in, or leave both blank");
+        return;
+      }
+      if (hasEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adminEmail.trim())) {
+        setError("Enter a valid email address");
+        return;
+      }
+    }
     setStep((s) => Math.min(s + 1, 4));
   };
 
@@ -332,6 +348,10 @@ export function SpaceWizard() {
           checkoutSessionId: sessionId,
           paymentMethod: "Stripe",
           ...(preferredRegion ? { preferredRegion } : {}),
+          ...(companyName.trim() ? { companyName: companyName.trim() } : {}),
+          ...(warehouseName.trim() ? { warehouseName: warehouseName.trim() } : {}),
+          ...(adminFullName.trim() ? { adminFullName: adminFullName.trim() } : {}),
+          ...(adminEmail.trim() ? { adminEmail: adminEmail.trim() } : {}),
         }),
       });
       const data = await res.json();
@@ -343,7 +363,7 @@ export function SpaceWizard() {
     } finally {
       setBusy(false);
     }
-  }, [slug, password, selectedApps, plan, preferredRegion]);
+  }, [slug, password, selectedApps, plan, preferredRegion, companyName, warehouseName, adminFullName, adminEmail]);
 
   const onCheckoutSuccess = (result: CheckoutSuccess) => {
     setCheckoutSessionId(result.sessionId);
@@ -475,7 +495,8 @@ export function SpaceWizard() {
                 <h2 className="text-xl font-semibold text-foreground">Apps &amp; Administrator</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
                   Choose which apps to install — only apps included in your {selectedPlan?.title || "selected"} plan are
-                  available. Sign-in user is always <strong>Administrator</strong>.
+                  available. You always sign in as <strong>Administrator</strong>; add your own account below if you'd
+                  like a second, named login too.
                 </p>
                 <div className="mt-6 grid gap-2 sm:grid-cols-2">
                   {scopedApps.map((app) => {
@@ -506,6 +527,55 @@ export function SpaceWizard() {
                     <Label>Confirm</Label>
                     <Input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
                   </div>
+                </div>
+
+                <div className="mt-8 border-t border-border pt-6">
+                  <h3 className="text-sm font-semibold text-foreground">Custom setup (optional)</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Leave blank for sensible defaults — Saudi Arabia / SAR, a "Stores" warehouse, and Administrator
+                    as the only sign-in user.
+                  </p>
+                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                    <div className="grid gap-1.5">
+                      <Label>Company name</Label>
+                      <Input
+                        placeholder="e.g. Acme Trading Co"
+                        value={companyName}
+                        onChange={(e) => setCompanyName(e.target.value)}
+                      />
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label>Default warehouse name</Label>
+                      <Input
+                        placeholder="e.g. Main Warehouse"
+                        value={warehouseName}
+                        onChange={(e) => setWarehouseName(e.target.value)}
+                      />
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label>Your name (adds a second sign-in)</Label>
+                      <Input
+                        placeholder="Full name"
+                        value={adminFullName}
+                        onChange={(e) => setAdminFullName(e.target.value)}
+                      />
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label>Your email</Label>
+                      <Input
+                        type="email"
+                        placeholder="you@example.com"
+                        value={adminEmail}
+                        onChange={(e) => setAdminEmail(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  {(adminFullName.trim() || adminEmail.trim()) && (!adminFullName.trim() || !adminEmail.trim()) && (
+                    <p className="mt-2 text-xs text-amber-500">
+                      Enter both your name and email to add a second sign-in — otherwise only Administrator is
+                      created.
+                    </p>
+                  )}
                 </div>
               </section>
             )}
