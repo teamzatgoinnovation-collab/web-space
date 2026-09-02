@@ -15,7 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
 
-const APP_LABELS: Record<string, string> = {
+export const APP_LABELS: Record<string, string> = {
   frappe: "Framework",
   erpnext: "ERPNext",
   hrms: "HR",

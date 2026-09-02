@@ -29,7 +29,10 @@ import { sitesLog } from "./sites-activity";
 import { isDevConsoleEnabled } from "./dev-console";
 
 const PROTECTED_APPS = new Set(["frappe"]);
-const HIDDEN_INSTALL = new Set(["zatgo_space"]);
+/** Platform / ops apps — not offered as installable on a customer's own site.
+ * Mirrors CATALOG_HIDDEN_APPS in control-plane.ts (kept separate: this list
+ * gates install/uninstall actions on an existing site, not new-site catalog). */
+const HIDDEN_INSTALL = new Set(["zatgo_space", "zatgo_core", "zatgo_hub", "space", "space_cloud"]);
 
 export function hostnameFromSlug(slug: string): string {
   const s = slug.trim().toLowerCase();
