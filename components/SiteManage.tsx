@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, ExternalLink, Boxes } from "lucide-react";
 import { formatMb } from "@/lib/format";
@@ -57,6 +58,7 @@ function SectionCard({ title, subtitle, children }: { title: string; subtitle?: 
 }
 
 export function SiteManage({ slug }: Props) {
+  const router = useRouter();
   const [site, setSite] = useState<SiteDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -95,6 +97,10 @@ export function SiteManage({ slug }: Props) {
       });
       const data = await res.json();
       if (!data.ok) throw new Error(data.error || "Action failed");
+      if (body.action === "delete") {
+        router.push("/");
+        return;
+      }
       setNotice(successMsg);
       await load();
       if (body.action === "install-app") setSelectedInstall("");
@@ -343,6 +349,34 @@ export function SiteManage({ slug }: Props) {
           )}
         </SectionCard>
       )}
+
+      {/* ── Danger zone ── */}
+      <Card className="mt-5 border-destructive/30">
+        <CardHeader>
+          <CardTitle className="text-base text-destructive">Danger zone</CardTitle>
+          <CardDescription>
+            Permanently delete this site and all of its data. This cannot be undone.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button
+            variant="destructive"
+            disabled={!!busy || locked}
+            onClick={() => {
+              if (
+                !window.confirm(
+                  `Permanently delete ${site.hostname}?\n\nThis destroys the site, its database, and all files. This cannot be undone.`,
+                )
+              ) {
+                return;
+              }
+              void runAction("delete", { action: "delete" }, "Site deleted.");
+            }}
+          >
+            {busy === "delete" ? "Deleting…" : "Delete site"}
+          </Button>
+        </CardContent>
+      </Card>
     </div>
   );
 }
