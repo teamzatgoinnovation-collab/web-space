@@ -130,9 +130,10 @@ const DEFAULT_PLANS: SpacePlan[] = [
     diskLimitMb: 30720,
     isActive: true,
     sortOrder: 3,
-    allowed_apps: ["frappe", "erpnext", "hrms", "crm", "zatgo_core", "chat_ai", "tracker", "helpdesk", "telephony"].map(
-      (pkg) => ({ package: pkg, title: titleForApp(pkg) }),
-    ),
+    allowed_apps: ["frappe", "erpnext", "hrms", "crm", "zatgo_core", "chat_ai", "tracker"].map((pkg) => ({
+      package: pkg,
+      title: titleForApp(pkg),
+    })),
   },
 ];
 
