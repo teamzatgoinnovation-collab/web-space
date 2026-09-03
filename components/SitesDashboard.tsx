@@ -28,7 +28,7 @@ export const APP_LABELS: Record<string, string> = {
   zatgo_space: "ZatGo Space",
 };
 
-const HIDDEN_APPS = new Set(["frappe", "zatgo_space"]);
+const HIDDEN_APPS = new Set(["frappe", "zatgo_hub", "space", "space_cloud"]);
 
 function appLabel(pkg: string): string {
   return APP_LABELS[pkg] || pkg.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
