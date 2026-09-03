@@ -10,7 +10,7 @@ import { titleForApp } from "@/lib/control-plane";
  * (site-manage.ts) — this is the third, Frappe-backed copy of the same
  * concern, since space_cloud's own list_catalog doesn't filter these out
  * either. */
-const HIDDEN_APPS = new Set(["zatgo_space", "zatgo_core", "zatgo_hub", "space", "space_cloud"]);
+const HIDDEN_APPS = new Set(["zatgo_space", "zatgo_hub", "space", "space_cloud"]);
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
