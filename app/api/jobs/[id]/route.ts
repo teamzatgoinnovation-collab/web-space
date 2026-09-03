@@ -7,42 +7,6 @@ import { isDevConsoleEnabled } from "@/lib/dev-console";
 
 export const runtime = "nodejs";
 
-/** Map Space Deployment Job progress → wizard stage checklist. */
-function stagesFromProgress(progress: number, status: string) {
-  const steps = [
-    { id: "validate", label: "Checking your site name", at: 5 },
-    { id: "dns", label: "Connecting your subdomain", at: 15 },
-    { id: "new-site", label: "Creating your ERPNext site", at: 25 },
-    { id: "apps", label: "Installing selected apps", at: 40 },
-    { id: "cache", label: "Finishing setup", at: 85 },
-  ] as const;
-
-  if (status === "Queued" || status === "queued") {
-    return steps.map((s, i) => ({
-      id: s.id,
-      label: s.label,
-      status: i === 0 ? "running" : "pending",
-    }));
-  }
-
-  const failed = status === "Failed" || status === "failed";
-  const done = status === "Succeeded" || status === "succeeded";
-  let runningIdx = -1;
-  for (let i = 0; i < steps.length; i++) {
-    if (progress >= steps[i].at) runningIdx = i;
-  }
-  if (done) {
-    return steps.map((s) => ({ id: s.id, label: s.label, status: "succeeded" }));
-  }
-  return steps.map((s, i) => {
-    if (i < runningIdx) return { id: s.id, label: s.label, status: "succeeded" };
-    if (i === runningIdx) {
-      return { id: s.id, label: s.label, status: failed ? "failed" : "running" };
-    }
-    return { id: s.id, label: s.label, status: "pending" };
-  });
-}
-
 const GENERIC_JOB_ERROR = "Something went wrong while setting this up. Please try again, or contact support if this keeps happening.";
 
 /** Customers never see raw tracebacks/internal paths; the full error_log stays
@@ -71,14 +35,18 @@ function mapFrappeJob(raw: Record<string, unknown>, id: string, devConsole: bool
   return {
     id,
     status,
-    stages: stagesFromProgress(progress, statusRaw),
     error: status === "failed" ? safeJobError(raw.error_log, devConsole) : undefined,
     result:
       status === "succeeded" && domain
         ? { deskUrl: `https://${domain}`, hostname: domain }
         : undefined,
     progress,
-    output: raw.output,
+    // Developer-authored progress checkpoints ("[25%] Creating site X") — safe by
+    // construction, no commands/credentials — powers the customer-facing activity log.
+    output: typeof raw.output === "string" ? raw.output : undefined,
+    startedAt: typeof raw.started_at === "string" ? raw.started_at : undefined,
+    estimatedMinutes: raw.estimated_minutes ? Number(raw.estimated_minutes) : undefined,
+    canRetry: raw.can_retry != null ? Boolean(Number(raw.can_retry)) : status === "failed",
   };
 }
 
