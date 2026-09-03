@@ -106,7 +106,7 @@ const DEFAULT_PLANS: SpacePlan[] = [
     diskLimitMb: 5120,
     isActive: true,
     sortOrder: 1,
-    allowed_apps: ["frappe", "erpnext"].map((pkg) => ({ package: pkg, title: titleForApp(pkg) })),
+    allowed_apps: ["frappe", "erpnext", "zatgo_core"].map((pkg) => ({ package: pkg, title: titleForApp(pkg) })),
   },
   {
     code: "pro",
@@ -118,7 +118,7 @@ const DEFAULT_PLANS: SpacePlan[] = [
     diskLimitMb: 15360,
     isActive: true,
     sortOrder: 2,
-    allowed_apps: ["frappe", "erpnext", "hrms"].map((pkg) => ({ package: pkg, title: titleForApp(pkg) })),
+    allowed_apps: ["frappe", "erpnext", "hrms", "zatgo_core"].map((pkg) => ({ package: pkg, title: titleForApp(pkg) })),
   },
   {
     code: "enterprise",
