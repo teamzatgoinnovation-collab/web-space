@@ -86,7 +86,7 @@ const APP_TITLE_OVERRIDES: Record<string, string> = {
 };
 
 /** Platform / ops apps — not offered in the customer wizard. */
-const CATALOG_HIDDEN_APPS = new Set(["zatgo_space", "zatgo_core", "zatgo_hub", "space", "space_cloud"]);
+const CATALOG_HIDDEN_APPS = new Set(["zatgo_space", "zatgo_hub", "space", "space_cloud"]);
 
 export function titleForApp(pkg: string): string {
   return (
@@ -130,7 +130,9 @@ const DEFAULT_PLANS: SpacePlan[] = [
     diskLimitMb: 30720,
     isActive: true,
     sortOrder: 3,
-    allowed_apps: ["frappe", "erpnext", "hrms", "crm"].map((pkg) => ({ package: pkg, title: titleForApp(pkg) })),
+    allowed_apps: ["frappe", "erpnext", "hrms", "crm", "zatgo_core", "chat_ai", "tracker", "helpdesk", "telephony"].map(
+      (pkg) => ({ package: pkg, title: titleForApp(pkg) }),
+    ),
   },
 ];
 
