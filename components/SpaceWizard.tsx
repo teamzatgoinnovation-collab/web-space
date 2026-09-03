@@ -144,7 +144,6 @@ export function SpaceWizard() {
   const [slug, setSlug] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
-  const [selectedApps, setSelectedApps] = useState<string[]>(["frappe", "erpnext"]);
   const [companyName, setCompanyName] = useState("");
   const [warehouseName, setWarehouseName] = useState("");
   const [adminFullName, setAdminFullName] = useState("");
@@ -278,27 +277,18 @@ export function SpaceWizard() {
     return `${s}.${catalog.domainSuffix}`;
   }, [slug, catalog]);
 
-  const toggleApp = (pkg: string, required?: boolean) => {
-    if (required || pkg === "frappe") return;
-    setSelectedApps((prev) =>
-      prev.includes(pkg) ? prev.filter((p) => p !== pkg) : [...prev, pkg],
-    );
-  };
-
-  /** The plan decides which apps are even selectable — narrow the catalog's
-   * full app list down to what the chosen plan allows (plus the always-on core). */
+  /** The plan decides which apps get installed — narrow the catalog's full
+   * app list down to what the chosen plan allows (plus the always-on core).
+   * Every app here is installed automatically; there's no per-app opt-out at
+   * creation time (the provisioning job always installs the plan's full
+   * allowed-apps list, not a client-picked subset) — so this list is
+   * informational, not a set of checkboxes. */
   const selectedPlan = useMemo(() => catalog?.plans.find((p) => p.code === plan), [catalog, plan]);
   const scopedApps = useMemo(() => {
     const allowed = new Set((selectedPlan?.allowed_apps || []).map((a) => a.package));
     return (catalog?.apps || []).filter((app) => app.required || app.package === "frappe" || allowed.has(app.package));
   }, [catalog, selectedPlan]);
-
-  // Plan changed (or loaded) — drop any previously-picked app the new plan doesn't allow.
-  useEffect(() => {
-    if (!selectedPlan) return;
-    const allowedPkgs = new Set(scopedApps.map((a) => a.package));
-    setSelectedApps((prev) => prev.filter((p) => allowedPkgs.has(p)));
-  }, [selectedPlan, scopedApps]);
+  const selectedApps = useMemo(() => scopedApps.map((app) => app.package), [scopedApps]);
 
   const next = () => {
     setError(null);
@@ -494,29 +484,25 @@ export function SpaceWizard() {
               <section>
                 <h2 className="text-xl font-semibold text-foreground">Apps &amp; Administrator</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Choose which apps to install — only apps included in your {selectedPlan?.title || "selected"} plan are
-                  available. You always sign in as <strong>Administrator</strong>; add your own account below if you'd
-                  like a second, named login too.
+                  These apps are included in your {selectedPlan?.title || "selected"} plan and will be installed
+                  automatically. You always sign in as <strong>Administrator</strong>; add your own account below if
+                  you'd like a second, named login too.
                 </p>
                 <div className="mt-6 grid gap-2 sm:grid-cols-2">
-                  {scopedApps.map((app) => {
-                    const on = selectedApps.includes(app.package);
-                    return (
-                      <button
-                        key={app.package}
-                        type="button"
-                        disabled={app.required || app.package === "frappe"}
-                        onClick={() => toggleApp(app.package, app.required)}
-                        className={cn(
-                          "rounded-xl border px-4 py-3 text-left text-sm transition",
-                          on ? "border-primary bg-primary/10" : "border-border bg-background hover:border-muted-foreground/40",
-                        )}
-                      >
+                  {scopedApps.map((app) => (
+                    <div
+                      key={app.package}
+                      className="flex items-center gap-3 rounded-xl border border-primary bg-primary/10 px-4 py-3 text-left text-sm"
+                    >
+                      <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                        <Check className="size-3.5" />
+                      </span>
+                      <div>
                         <div className="font-medium text-foreground">{app.title}</div>
                         <div className="text-xs text-muted-foreground">{app.package}</div>
-                      </button>
-                    );
-                  })}
+                      </div>
+                    </div>
+                  ))}
                 </div>
                 <div className="mt-6 grid gap-4 sm:grid-cols-2">
                   <div className="grid gap-1.5">
