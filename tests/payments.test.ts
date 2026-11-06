@@ -110,3 +110,17 @@ test("verifySession: routes by provider, rejects inactive provider and wrong cur
   assert.equal((await verifySession(payload, proSar, deps(rzp()))).ok, false); // razorpay can't take SAR
   assert.equal((await verifySession(payload, proInr, deps(rzp(), {}))).ok, false);
 });
+
+test("billing: a free plan is offered even with no providers configured", async () => {
+  // checkoutOptions reads process.env via the registry; none of the provider keys are set here.
+  const keys = ["MOYASAR_SECRET_KEY", "NEXT_PUBLIC_MOYASAR_PUBLISHABLE_KEY", "RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET"];
+  const saved = keys.map((k) => process.env[k]);
+  keys.forEach((k) => delete process.env[k]);
+  try {
+    const { priceCents: pc } = await import("../lib/payments/pricing.ts");
+    assert.equal(pc("basic", "SAR", {}), 0);
+    assert.deepEqual(activeProviders({ fetch, env: {} }), []);
+  } finally {
+    keys.forEach((k, i) => (saved[i] === undefined ? delete process.env[k] : (process.env[k] = saved[i])));
+  }
+});

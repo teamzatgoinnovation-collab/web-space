@@ -48,6 +48,10 @@ export function checkoutOptions(planCode: string): {
 } {
   const plan = getPlan(planCode);
   if (!plan || !plan.isActive) return { currencies: [] };
+  // A free plan needs no gateway, so it is always available (in the default currency).
+  if ((priceCents(planCode, "SAR") ?? 1) === 0) {
+    return { currencies: [{ currency: "SAR", priceCents: 0, providers: [] }] };
+  }
   const active = activeProviders();
   return {
     currencies: availableCurrencies(planCode).map((currency) => ({
