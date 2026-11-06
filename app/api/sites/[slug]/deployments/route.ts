@@ -27,7 +27,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ slug: string }
   const sid = await getSid();
   if (!sid) return NextResponse.json({ ok: false, error: "Not signed in." }, { status: 401 });
   try {
-    const rows = await callMethod<Row[]>("space.api.v1.space.list_jobs", { site: slug }, sid);
+    const rows = await callMethod<Row[]>("space_cloud.api.v1.space.list_jobs", { site: slug }, sid);
     const jobs = (Array.isArray(rows) ? rows : []).map((r) => {
       const a = ms(r.started_at);
       const b = ms(r.finished_at);
