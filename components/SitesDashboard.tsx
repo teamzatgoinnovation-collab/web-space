@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 
 export const APP_LABELS: Record<string, string> = {
   frappe: "Framework",
-  erpnext: "ERPNext",
+  erpnext: "ZatGo ERP",
   hrms: "HR",
   crm: "CRM",
   helpdesk: "Helpdesk",

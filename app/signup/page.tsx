@@ -54,8 +54,8 @@ export default function SignupPage() {
     <div className="mx-auto flex min-h-[calc(100dvh-11rem)] max-w-sm flex-col justify-center">
       <div className="mb-8 text-center">
         <p className="text-sm font-medium tracking-wide text-primary">ZatGo</p>
-        <h1 className="mt-1 text-3xl font-semibold tracking-tight text-foreground">Create your account</h1>
-        <p className="mt-2 text-sm text-muted-foreground">Create ERPNext sites on ZatGo Space.</p>
+        <h1 className="mt-1 text-3xl font-semibold tracking-tight text-foreground">Create Your ZatGo Account</h1>
+        <p className="mt-2 text-sm text-muted-foreground">Start your 1-month free trial and set up your business ERP.</p>
       </div>
       <Card className="p-6">
         <CardContent className="p-0">
@@ -112,7 +112,7 @@ export default function SignupPage() {
             </div>
             {error ? <p className="text-sm text-destructive">{error}</p> : null}
             <Button type="submit" disabled={busy} className="mt-2 w-full">
-              {busy ? "Creating account…" : "Create account"}
+              {busy ? "Creating account…" : "Create Free Account"}
             </Button>
           </form>
         </CardContent>

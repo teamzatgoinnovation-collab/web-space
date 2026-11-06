@@ -63,7 +63,7 @@ const STEPS = ["Site", "Plan", "Apps", "Pay", "Install"] as const;
 const INSTALL_STEPS = [
   { id: "validate", label: "Checking your site name", typicalMs: 20_000 },
   { id: "dns", label: "Connecting your subdomain", typicalMs: 30_000 },
-  { id: "new-site", label: "Creating your ERPNext site", typicalMs: 15 * 60_000 },
+  { id: "new-site", label: "Creating your ERP site", typicalMs: 15 * 60_000 },
   { id: "apps", label: "Installing selected apps", typicalMs: 8 * 60_000 },
   { id: "cache", label: "Finishing setup", typicalMs: 60_000 },
 ] as const;
@@ -392,7 +392,7 @@ export function SpaceWizard() {
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-sm font-medium tracking-wide text-primary">ZatGo</p>
-            <h1 className="mt-1 text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">Space</h1>
+            <h1 className="mt-1 text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">Create Your Business ERP</h1>
           </div>
           <div className="flex shrink-0 flex-col items-end gap-2">
             <Button variant="secondary" size="sm" nativeButton={false} render={<Link href="/">Your sites</Link>} />
@@ -404,12 +404,11 @@ export function SpaceWizard() {
           </div>
         </div>
         <p className="mt-3 max-w-xl text-base text-muted-foreground">
-          Create your ERPNext site on a zatgoinnovation.com address — choose apps, pick a plan, and open Desk when it&apos;s
-          ready.
+          Choose your site name, select a monthly plan, and launch your business management system.
         </p>
         {isTrialFlow && (
           <p className="mt-3 inline-block rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-            🎉 Trying SpaceCloud — pick a site name to start your free trial
+            🎉 Pick a site name to start your 1 month free trial
           </p>
         )}
       </header>
@@ -569,8 +568,8 @@ export function SpaceWizard() {
               <section>
                 <h2 className="text-xl font-semibold text-foreground">Billing plan</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Choose capacity for your site. Free plans activate immediately; paid plans are billed monthly via
-                  Moyasar.
+                  Choose your monthly plan. Start with 1 month free, then pay monthly via Moyasar. No mandatory annual
+                  subscription.
                 </p>
                 {catalog?.pool && catalog.pool.freeRamMb != null && catalog.pool.freeDiskMb != null && (
                   <p className="mt-2 text-xs text-muted-foreground">
@@ -659,7 +658,7 @@ export function SpaceWizard() {
               <section>
                 <h2 className="text-xl font-semibold text-foreground">Installing</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  {hostname ? `Setting up ${hostname}` : "We will set up your site and open ERPNext when ready."}
+                  {hostname ? `Setting up ${hostname}` : "We will set up your site and open your ERP when ready."}
                 </p>
                 {!jobId && !job && (
                   <Button
@@ -685,7 +684,7 @@ export function SpaceWizard() {
                       </Link>
                     )}
                     {job?.status === "succeeded" && job.result?.deskUrl && (
-                      <Button nativeButton={false} render={<a href={job.result.deskUrl}>Open ERPNext login</a>} />
+                      <Button nativeButton={false} render={<a href={job.result.deskUrl}>Open your ERP login</a>} />
                     )}
 
                   </div>

@@ -8,7 +8,7 @@ const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 export const metadata: Metadata = {
   title: "ZatGo Space — Customer Portal",
-  description: "Manage your ERPNext sites on ZatGo Space.",
+  description: "Manage your ERP sites on ZatGo Space. 1 month free, then a simple monthly subscription.",
 };
 
 export const viewport: Viewport = {
