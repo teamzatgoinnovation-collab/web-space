@@ -41,6 +41,8 @@ function mapFrappeJob(raw: Record<string, unknown>, id: string, devConsole: bool
         ? { deskUrl: `https://${domain}`, hostname: domain }
         : undefined,
     progress,
+    // The wizard indexes job.stages; the Frappe control plane reports progress/output only.
+    stages: [] as { id: string; label: string; status: string }[],
     // Developer-authored progress checkpoints ("[25%] Creating site X") — safe by
     // construction, no commands/credentials — powers the customer-facing activity log.
     output: typeof raw.output === "string" ? raw.output : undefined,

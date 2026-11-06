@@ -187,7 +187,7 @@ export function SpaceWizard() {
           const d = await r.json();
           if (d.ok && d.job) {
             misses = 0;
-            setJob(d.job);
+            setJob({ ...d.job, stages: Array.isArray(d.job.stages) ? d.job.stages : [] });
             return;
           }
           misses += 1;
