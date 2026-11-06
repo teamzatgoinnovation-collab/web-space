@@ -99,3 +99,10 @@ test("log lines are attributed to the stage of the latest checkpoint", () => {
   const lines = logLines({ status: "Succeeded", output: OK_OUTPUT });
   assert.equal(lines.find((l) => l.text.startsWith("Notice: ssl"))?.stage, "certificate");
 });
+
+test("elapsed for a running job uses the job's own modified time, not this machine's clock", () => {
+  const job = { status: "Running", startedAt: "2026-11-06 06:00:00", modifiedAt: "2026-11-06 06:00:45" };
+  // `now` is hours away (different timezone) and must not matter.
+  assert.equal(elapsedMs(job, Date.parse("2026-11-06T03:00:00")), 45_000);
+  assert.equal(elapsedMs(job, Date.parse("2026-11-06T09:00:00")), 45_000);
+});

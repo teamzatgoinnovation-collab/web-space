@@ -21,6 +21,8 @@ export type JobInput = {
   output?: string;
   startedAt?: string;
   finishedAt?: string;
+  /** Frappe's own `modified` time: same clock as startedAt, so safe to subtract (unlike Date.now()). */
+  modifiedAt?: string;
   timeline?: TimelineEntry[];
 };
 
@@ -132,7 +134,9 @@ export function overallPercent(job: JobInput): number {
 export function elapsedMs(job: JobInput, now = Date.now()): number | undefined {
   const a = ms(job.startedAt);
   if (a === undefined) return undefined;
-  const b = ms(job.finishedAt) ?? now;
+  // Frappe timestamps carry no timezone and may not match this server's clock, so
+  // prefer finishedAt, then the job's own last-modified time, over Date.now().
+  const b = ms(job.finishedAt) ?? ms(job.modifiedAt) ?? now;
   return Math.max(0, b - a);
 }
 

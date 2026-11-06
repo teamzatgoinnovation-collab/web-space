@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, ChevronDown, X as XIcon } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
@@ -67,6 +67,18 @@ export function InstallChecklist({
   busy?: boolean;
 }) {
   const [open, setOpen] = useState<string | null>(null);
+  // elapsedMs is exact as of the last poll; tick it locally between polls.
+  const [, setTick] = useState(0);
+  const [seenAt, setSeenAt] = useState(() => Date.now());
+  useEffect(() => setSeenAt(Date.now()), [job?.elapsedMs]);
+  const live = !job || job.status === "queued" || job.status === "running";
+  useEffect(() => {
+    if (!live) return;
+    const t = setInterval(() => setTick((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [live]);
+  const shownElapsed =
+    job?.elapsedMs === undefined ? undefined : job.elapsedMs + (live ? Date.now() - seenAt : 0);
   const stages: ChecklistStage[] = job?.stages?.length ? job.stages : deriveStages({ status: "queued" });
   const running = !job || job.status === "queued" || job.status === "running";
   const pct = job?.status === "succeeded" ? 100 : Math.round(job?.percent ?? 0);
@@ -78,7 +90,7 @@ export function InstallChecklist({
           <div className="flex items-center justify-between gap-3">
             <span>{job ? "Setting up your site — keep this page open." : "Waiting for the server to pick this up…"}</span>
             <span className="font-semibold text-primary tabular-nums">
-              {pct}%{job?.elapsedMs !== undefined ? ` · ${fmt(job.elapsedMs)}` : ""}
+              {pct}%{shownElapsed !== undefined ? ` · ${fmt(shownElapsed)}` : ""}
             </span>
           </div>
           <Progress value={pct} className="mt-2" />

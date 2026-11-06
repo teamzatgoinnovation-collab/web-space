@@ -46,6 +46,7 @@ function mapFrappeJob(raw: Record<string, unknown>, id: string, devConsole: bool
     output: typeof raw.output === "string" ? raw.output : undefined,
     startedAt: typeof raw.started_at === "string" ? raw.started_at : undefined,
     finishedAt: typeof raw.finished_at === "string" ? raw.finished_at : undefined,
+    modifiedAt: typeof raw.modified === "string" ? raw.modified : undefined,
     timeline,
   };
 
