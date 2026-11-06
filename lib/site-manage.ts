@@ -250,6 +250,7 @@ export async function manageSetPlan(
   hostname: string,
   planCode: string,
   checkoutSessionId?: string,
+  currency?: string,
 ): Promise<{ ok: true; plan: string; planTitle: string } | { ok: false; error: string }> {
   const host = assertSiteName(hostname);
   if (isDevConsoleEnabled()) sitesLog(`manage: set plan ${planCode} for ${host}`);
@@ -259,11 +260,12 @@ export async function manageSetPlan(
     plan: planCode,
     purpose: "upgrade",
     hostname: host,
+    currency,
   });
   if (!paid.ok) return { ok: false, error: paid.error };
 
   const result = setHostnamePlan(host, planCode, {
-    paymentMethod: "Stripe",
+    paymentMethod: "Online",
     checkoutSessionId: paid.session.id,
   });
   if (!result.ok) {

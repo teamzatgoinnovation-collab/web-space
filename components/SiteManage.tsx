@@ -6,7 +6,7 @@ import Link from "next/link";
 import { ArrowLeft, ExternalLink, Boxes } from "lucide-react";
 import { formatMb } from "@/lib/format";
 import { SiteUsageGraph } from "@/components/SiteUsageGraph";
-import { MoyasarCheckout, type CheckoutSuccess } from "@/components/MoyasarCheckout";
+import { CheckoutPanel, type CheckoutSuccess } from "@/components/CheckoutPanel";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -329,10 +329,9 @@ export function SiteManage({ slug }: Props) {
 
           {showCheckout && selectedPlan && selectedPlan !== site.plan && (
             <div className="mt-5">
-              <MoyasarCheckout
+              <CheckoutPanel
                 plan={selectedPlan}
                 planTitle={site.plans.find((p) => p.code === selectedPlan)?.title || selectedPlan}
-                listPriceCents={site.plans.find((p) => p.code === selectedPlan)?.priceCents ?? 0}
                 purpose="upgrade"
                 hostname={site.hostname}
                 onCancel={() => setShowCheckout(false)}
@@ -340,7 +339,7 @@ export function SiteManage({ slug }: Props) {
                   setShowCheckout(false);
                   void runAction(
                     "set-plan",
-                    { action: "set-plan", plan: selectedPlan, checkoutSessionId: result.sessionId },
+                    { action: "set-plan", plan: selectedPlan, checkoutSessionId: result.sessionId, currency: result.currency },
                     `Plan updated to ${result.planTitle}.`,
                   );
                 }}

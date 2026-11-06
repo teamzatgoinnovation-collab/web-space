@@ -18,14 +18,14 @@
  * session already.
  */
 
-import { getPlan, type SpacePlan } from "./control-plane";
-import { getPayment, moyasarConfigured } from "./moyasar";
+import { getPlan } from "./control-plane";
+import { priceCents } from "./payments/pricing";
+import { activeProviders, availableCurrencies, getProvider, splitSessionId, verifySession } from "./payments/registry";
+import type { Currency, PaymentPurpose, ProviderId } from "./payments/types";
 
-export type CheckoutPurpose = "provision" | "upgrade";
+export type CheckoutPurpose = PaymentPurpose;
 
 const FREE_PREFIX = "free_";
-const DESC_PREFIX = "space";
-const NONE = "-";
 
 export type CheckoutSession = {
   id: string;
@@ -33,47 +33,44 @@ export type CheckoutSession = {
   purpose: CheckoutPurpose;
   plan: string;
   planTitle: string;
-  currency: "SAR";
+  provider?: ProviderId;
+  currency: Currency;
   listPriceCents: number;
   amountDueCents: number;
   hostname?: string;
-  /** Only present for "open" (paid-plan) sessions — feeds MoyasarCheckout. */
-  form?: {
-    amount: number;
-    currency: "SAR";
-    description: string;
-    publishableKey: string;
-  };
+  /** Provider-specific data for the browser (open sessions only). */
+  client?: Record<string, unknown>;
 };
 
-export function planListPriceCents(plan: SpacePlan): number {
-  if (typeof plan.priceCents === "number") return plan.priceCents;
-  const m = plan.mock_price.match(/\$(\d+)/);
-  return m ? Number(m[1]) * 100 : 0;
+/** What the wizard offers for a plan: currencies, each with its price and providers. */
+export function checkoutOptions(planCode: string): {
+  currencies: { currency: Currency; priceCents: number; providers: { id: ProviderId; label: string; methods: string[] }[] }[];
+} {
+  const plan = getPlan(planCode);
+  if (!plan || !plan.isActive) return { currencies: [] };
+  const active = activeProviders();
+  return {
+    currencies: availableCurrencies(planCode).map((currency) => ({
+      currency,
+      priceCents: priceCents(planCode, currency)!,
+      providers: active
+        .filter((p) => p.currencies.includes(currency))
+        .map((p) => ({ id: p.id, label: p.label, methods: p.methods })),
+    })),
+  };
 }
 
-export function formatSar(cents: number): string {
-  return `${(Math.max(0, cents) / 100).toFixed(2)} SAR`;
-}
-
-function buildDescription(purpose: CheckoutPurpose, plan: string, hostname?: string): string {
-  return [DESC_PREFIX, purpose, plan, hostname || NONE].join("|");
-}
-
-function parseDescription(description: string | undefined): {
-  purpose: string;
-  plan: string;
-  hostname: string;
-} | null {
-  const parts = (description || "").split("|");
-  if (parts.length !== 4 || parts[0] !== DESC_PREFIX) return null;
-  return { purpose: parts[1], plan: parts[2], hostname: parts[3] };
+/** Legacy single-currency list price (SAR minor units) for places that show one number. */
+export function planListPriceCents(planCode: string): number {
+  return priceCents(planCode, "SAR") ?? 0;
 }
 
 export async function createCheckoutSession(input: {
   plan: string;
   purpose: CheckoutPurpose;
   hostname?: string;
+  provider?: string;
+  currency?: string;
 }): Promise<{ ok: true; session: CheckoutSession } | { ok: false; error: string }> {
   const plan = getPlan(input.plan);
   if (!plan || !plan.isActive) {
@@ -83,50 +80,43 @@ export async function createCheckoutSession(input: {
     return { ok: false, error: "Hostname required for plan upgrades" };
   }
   const hostname = input.hostname?.trim().toLowerCase() || undefined;
-  const amountCents = planListPriceCents(plan);
+  const currency = (input.currency || "SAR") as Currency;
+  const amountCents = priceCents(plan.code, currency);
+  if (amountCents === undefined) return { ok: false, error: "This plan is not available in that currency." };
+
+  const base = {
+    purpose: input.purpose,
+    plan: plan.code,
+    planTitle: plan.title,
+    currency,
+    listPriceCents: amountCents,
+    amountDueCents: amountCents,
+    hostname,
+  };
 
   if (amountCents <= 0) {
+    return { ok: true, session: { ...base, id: `${FREE_PREFIX}${crypto.randomUUID()}`, status: "complete" } };
+  }
+
+  const provider = getProvider(input.provider || "moyasar");
+  if (!provider || !provider.currencies.includes(currency) || !activeProviders().some((p) => p.id === provider.id)) {
+    return { ok: false, error: "That payment method is not available. Try another." };
+  }
+  try {
+    const client = await provider.createCheckout({
+      plan: plan.code,
+      purpose: input.purpose,
+      hostname,
+      amountCents,
+      currency,
+    });
     return {
       ok: true,
-      session: {
-        id: `${FREE_PREFIX}${crypto.randomUUID()}`,
-        status: "complete",
-        purpose: input.purpose,
-        plan: plan.code,
-        planTitle: plan.title,
-        currency: "SAR",
-        listPriceCents: 0,
-        amountDueCents: 0,
-        hostname,
-      },
+      session: { ...base, id: "", status: "open", provider: provider.id, client },
     };
+  } catch {
+    return { ok: false, error: "Could not start checkout. Try again." };
   }
-
-  if (!moyasarConfigured()) {
-    return { ok: false, error: "Payments are not configured yet. Try again later." };
-  }
-  const publishableKey = process.env.NEXT_PUBLIC_MOYASAR_PUBLISHABLE_KEY!.trim();
-
-  return {
-    ok: true,
-    session: {
-      id: "", // populated by Moyasar once the form actually creates the payment
-      status: "open",
-      purpose: input.purpose,
-      plan: plan.code,
-      planTitle: plan.title,
-      currency: "SAR",
-      listPriceCents: amountCents,
-      amountDueCents: amountCents,
-      hostname,
-      form: {
-        amount: amountCents,
-        currency: "SAR",
-        description: buildDescription(input.purpose, plan.code, hostname),
-        publishableKey,
-      },
-    },
-  };
 }
 
 /** Require a completed, matching checkout before provisioning or changing a plan. */
@@ -135,6 +125,7 @@ export async function assertPaidCheckout(opts: {
   plan: string;
   purpose: CheckoutPurpose;
   hostname?: string;
+  currency?: string;
 }): Promise<{ ok: true; session: { id: string } } | { ok: false; error: string }> {
   const sessionId = opts.sessionId?.trim();
   if (!sessionId) {
@@ -142,44 +133,28 @@ export async function assertPaidCheckout(opts: {
   }
 
   if (sessionId.startsWith(FREE_PREFIX)) {
-    // Free plan — nothing was charged.
+    // Free plan — nothing was charged. A free session is only valid for a free plan.
+    if ((priceCents(opts.plan, "SAR") ?? 1) > 0) return { ok: false, error: "Complete checkout before continuing." };
     return { ok: true, session: { id: sessionId } };
-  }
-
-  if (!moyasarConfigured()) {
-    return { ok: false, error: "Payments are not configured yet. Try again later." };
   }
 
   const plan = getPlan(opts.plan);
   if (!plan || !plan.isActive) {
     return { ok: false, error: "Unknown or inactive plan" };
   }
-  const expectedAmountCents = planListPriceCents(plan);
+  const { provider } = splitSessionId(sessionId);
+  const p = getProvider(provider);
+  const currency = ((opts.currency as Currency | undefined) || p?.currencies[0] || "SAR") as Currency;
+  const amountCents = priceCents(plan.code, currency);
+  if (amountCents === undefined) return { ok: false, error: "Unexpected payment currency." };
 
-  let payment;
-  try {
-    payment = await getPayment(sessionId);
-  } catch {
-    return { ok: false, error: "Checkout payment not found." };
-  }
-
-  if (payment.status !== "paid") {
-    return { ok: false, error: "Payment not completed. Finish checkout first." };
-  }
-  if (payment.currency !== "SAR") {
-    return { ok: false, error: "Unexpected payment currency." };
-  }
-  if (payment.amount !== expectedAmountCents) {
-    return { ok: false, error: "Payment amount does not match the selected plan." };
-  }
-
-  const parsed = parseDescription(payment.description);
-  if (!parsed || parsed.plan !== opts.plan || parsed.purpose !== opts.purpose) {
-    return { ok: false, error: "Checkout was for a different plan." };
-  }
-  if (opts.purpose === "upgrade" && opts.hostname && parsed.hostname !== opts.hostname.toLowerCase()) {
-    return { ok: false, error: "Checkout was for a different site." };
-  }
-
-  return { ok: true, session: { id: payment.id } };
+  const r = await verifySession(sessionId, {
+    plan: opts.plan,
+    purpose: opts.purpose,
+    hostname: opts.hostname,
+    amountCents,
+    currency,
+  });
+  if (!r.ok) return { ok: false, error: r.error };
+  return { ok: true, session: { id: r.sessionId! } };
 }

@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, X as XIcon } from "lucide-react";
 import { DevActivityConsole } from "@/components/DevActivityConsole";
-import { MoyasarCheckout, type CheckoutSuccess } from "@/components/MoyasarCheckout";
+import { CheckoutPanel, type CheckoutSuccess } from "@/components/CheckoutPanel";
 import { isDevConsoleEnabled } from "@/lib/dev-console";
 import { formatMb } from "@/lib/format";
 import Link from "next/link";
@@ -152,6 +152,7 @@ export function SpaceWizard() {
   const [preferredRegion, setPreferredRegion] = useState("");
   const [regions, setRegions] = useState<{ name?: string; title?: string }[]>([]);
   const [checkoutSessionId, setCheckoutSessionId] = useState<string | null>(null);
+  const [checkoutCurrency, setCheckoutCurrency] = useState<string | null>(null);
   const [paidCard, setPaidCard] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -318,7 +319,7 @@ export function SpaceWizard() {
     setStep((s) => Math.max(s - 1, 0));
   };
 
-  const startInstall = useCallback(async (sessionId: string) => {
+  const startInstall = useCallback(async (sessionId: string, currency?: string) => {
     setBusy(true);
     setError(null);
     setJob(null);
@@ -336,7 +337,7 @@ export function SpaceWizard() {
           apps: selectedApps,
           plan,
           checkoutSessionId: sessionId,
-          paymentMethod: "Stripe",
+          ...(currency ? { currency } : {}),
           ...(preferredRegion ? { preferredRegion } : {}),
           ...(companyName.trim() ? { companyName: companyName.trim() } : {}),
           ...(warehouseName.trim() ? { warehouseName: warehouseName.trim() } : {}),
@@ -357,8 +358,9 @@ export function SpaceWizard() {
 
   const onCheckoutSuccess = (result: CheckoutSuccess) => {
     setCheckoutSessionId(result.sessionId);
+    setCheckoutCurrency(result.currency);
     setPaidCard(result.planTitle);
-    void startInstall(result.sessionId);
+    void startInstall(result.sessionId, result.currency);
   };
 
   const retryInstall = () => {
@@ -366,7 +368,7 @@ export function SpaceWizard() {
     setJob(null);
     setJobId(null);
     if (checkoutSessionId) {
-      void startInstall(checkoutSessionId);
+      void startInstall(checkoutSessionId, checkoutCurrency ?? undefined);
     } else {
       setStep(3);
     }
@@ -639,14 +641,13 @@ export function SpaceWizard() {
             {step === 3 && (
               <section>
                 <h2 className="text-xl font-semibold text-foreground">Payment</h2>
-                <p className="mt-1 mb-5 text-sm text-muted-foreground">Enter card details to start your subscription.</p>
+                <p className="mt-1 mb-5 text-sm text-muted-foreground">Choose how to pay to start your subscription.</p>
                 {(() => {
                   const selected = (catalog?.plans || []).find((p) => p.code === plan);
                   return (
-                    <MoyasarCheckout
+                    <CheckoutPanel
                       plan={plan}
                       planTitle={selected?.title || plan}
-                      listPriceCents={selected?.priceCents ?? 0}
                       purpose="provision"
                       onSuccess={onCheckoutSuccess}
                       onCancel={() => setStep(1)}
@@ -667,7 +668,7 @@ export function SpaceWizard() {
                   <Button
                     disabled={busy || !checkoutSessionId}
                     onClick={() => {
-                      if (checkoutSessionId) void startInstall(checkoutSessionId);
+                      if (checkoutSessionId) void startInstall(checkoutSessionId, checkoutCurrency ?? undefined);
                       else setStep(3);
                     }}
                     className="mt-6"

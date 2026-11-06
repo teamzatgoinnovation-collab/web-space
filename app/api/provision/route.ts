@@ -14,7 +14,8 @@ const Body = z.object({
   adminPassword: z.string().min(8).max(128),
   apps: z.array(z.string()).default(["frappe", "erpnext"]),
   plan: z.string().min(1),
-  checkoutSessionId: z.string().min(8).max(128),
+  checkoutSessionId: z.string().min(8).max(256),
+  currency: z.enum(["SAR", "INR", "USD"]).optional(),
   paymentMethod: z.enum(["Stripe"]).optional(),
   preferredRegion: z.string().min(1).max(64).optional(),
   companyName: z.string().min(1).max(140).optional(),
@@ -51,6 +52,7 @@ export async function POST(req: NextRequest) {
     sessionId: parsed.data.checkoutSessionId,
     plan: parsed.data.plan,
     purpose: "provision",
+    currency: parsed.data.currency,
   });
   if (!paid.ok) {
     return NextResponse.json({ ok: false, error: paid.error }, { status: 402 });

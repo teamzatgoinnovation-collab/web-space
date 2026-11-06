@@ -30,7 +30,8 @@ const Body = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("set-plan"),
     plan: z.string().min(1).max(64),
-    checkoutSessionId: z.string().min(8).max(128),
+    checkoutSessionId: z.string().min(8).max(256),
+    currency: z.enum(["SAR", "INR", "USD"]).optional(),
   }),
   z.object({
     action: z.literal("clear-cache"),
@@ -116,7 +117,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       return NextResponse.json(result);
     }
     if (body.action === "set-plan") {
-      const result = await manageSetPlan(hostname, body.plan, body.checkoutSessionId);
+      const result = await manageSetPlan(hostname, body.plan, body.checkoutSessionId, body.currency);
       if (!result.ok) return NextResponse.json(result, { status: 400 });
       return NextResponse.json(result);
     }

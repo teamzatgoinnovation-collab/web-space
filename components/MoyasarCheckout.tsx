@@ -55,6 +55,7 @@ export type CheckoutSuccess = {
   sessionId: string;
   plan: string;
   planTitle: string;
+  currency: string;
 };
 
 type Props = {
@@ -83,7 +84,7 @@ export function MoyasarCheckout({ plan, planTitle, listPriceCents, purpose, host
     // Returning from a redirect-based payment method (Moyasar appends ?id=).
     const returnedId = new URLSearchParams(window.location.search).get("id");
     if (returnedId) {
-      onSuccess({ sessionId: returnedId, plan, planTitle });
+      onSuccess({ sessionId: `moyasar:${returnedId}`, plan, planTitle, currency: "SAR" });
       return;
     }
 
@@ -92,7 +93,7 @@ export function MoyasarCheckout({ plan, planTitle, listPriceCents, purpose, host
         const res = await fetch("/api/billing/checkout", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ plan, purpose, hostname }),
+          body: JSON.stringify({ plan, purpose, hostname, provider: "moyasar", currency: "SAR" }),
         });
         const data = await res.json();
         if (!data.ok) throw new Error(data.error || "Could not start checkout");
@@ -100,7 +101,7 @@ export function MoyasarCheckout({ plan, planTitle, listPriceCents, purpose, host
 
         if (data.session.status === "complete") {
           setSkippedFree(true);
-          onSuccess({ sessionId: data.session.id, plan, planTitle: data.session.planTitle });
+          onSuccess({ sessionId: data.session.id, plan, planTitle: data.session.planTitle, currency: data.session.currency });
           return;
         }
 
@@ -109,16 +110,16 @@ export function MoyasarCheckout({ plan, planTitle, listPriceCents, purpose, host
 
         window.Moyasar?.init({
           element: `#${elementId.current}`,
-          amount: data.session.form.amount,
-          currency: data.session.form.currency,
-          description: data.session.form.description,
-          publishable_api_key: data.session.form.publishableKey,
+          amount: data.session.client.amount,
+          currency: data.session.client.currency,
+          description: data.session.client.description,
+          publishable_api_key: data.session.client.publishableKey,
           callback_url: window.location.href,
           supported_networks: ["visa", "mastercard", "mada"],
           methods: ["creditcard"],
           on_completed: async (payment) => {
             if (payment.status === "paid") {
-              onSuccess({ sessionId: payment.id, plan, planTitle });
+              onSuccess({ sessionId: `moyasar:${payment.id}`, plan, planTitle, currency: "SAR" });
             } else {
               setBootError("Payment was not completed.");
             }
