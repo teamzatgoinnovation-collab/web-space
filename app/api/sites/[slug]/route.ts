@@ -33,7 +33,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
           sid,
         );
         if (data && typeof data === "object" && (data.site_name || data.name)) {
-          const domain = String(data.domain || `${slug}.zatgo.online`);
+          const domain = String(data.domain || `${slug}.zatgoinnovation.com`);
           const installedPkgs = Array.isArray(data.installed_apps)
             ? (data.installed_apps as { app_package?: string }[])
                 .map((a) => String(a.app_package || ""))

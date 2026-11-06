@@ -40,11 +40,11 @@ export const RESERVED_SLUGS = new Set([
 const ALLOWED = new Set(["docker", "ssh"]);
 
 export function domainSuffix(): string {
-  return process.env.SPACE_DOMAIN_SUFFIX?.trim() || "zatgo.online";
+  return process.env.SPACE_DOMAIN_SUFFIX?.trim() || "zatgoinnovation.com";
 }
 
 export function dropletIp(): string {
-  return process.env.SPACE_DROPLET_IP?.trim() || "157.230.8.164";
+  return process.env.SPACE_DROPLET_IP?.trim() || "2.29.17.8";
 }
 
 export function benchEnv(): BenchEnv {
@@ -165,7 +165,7 @@ export type DoSshConfig = {
 };
 
 export function getDoSshConfig(): DoSshConfig | { error: string } {
-  const host = process.env.DO_SSH_HOST?.trim() || "157.230.8.164";
+  const host = process.env.DO_SSH_HOST?.trim() || "2.29.17.8";
   const user = process.env.DO_SSH_USER?.trim() || "root";
   const port = Number(process.env.DO_SSH_PORT?.trim() || "22");
   const keyPath =

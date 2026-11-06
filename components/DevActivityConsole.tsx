@@ -129,7 +129,7 @@ export function DevActivityConsole({
                   }`}
                   title={j.id}
                 >
-                  {(j.meta?.hostname || j.id).replace(".zatgo.online", "")}
+                  {(j.meta?.hostname || j.id).replace(/\.zatgo(innovation\.com|\.online)$/, "")}
                 </button>
               ))}
             </div>

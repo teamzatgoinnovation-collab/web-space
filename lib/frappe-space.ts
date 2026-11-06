@@ -1,9 +1,9 @@
 /**
- * Client for Space Frappe control plane APIs on spaceapi.zatgo.online.
+ * Client for Space Frappe control plane APIs on zatgoportal.zatgoinnovation.com.
  */
 
 const baseUrl = () =>
-  (process.env.FRAPPE_BASE_URL || process.env.SPACE_FRAPPE_URL || "https://spaceapi.zatgo.online").replace(
+  (process.env.FRAPPE_BASE_URL || process.env.SPACE_FRAPPE_URL || "https://zatgoportal.zatgoinnovation.com").replace(
     /\/$/,
     "",
   );

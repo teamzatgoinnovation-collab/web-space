@@ -30,7 +30,7 @@ function mapFrappeJob(raw: Record<string, unknown>, id: string, devConsole: bool
   const status = statusMap[statusRaw] || statusRaw.toLowerCase();
   const site = String(raw.site || "");
   const domain =
-    site.includes(".") ? site : site ? `${site}.zatgo.online` : undefined;
+    site.includes(".") ? site : site ? `${site}.zatgoinnovation.com` : undefined;
 
   return {
     id,

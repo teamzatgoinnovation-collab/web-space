@@ -2,18 +2,18 @@
 
 **Package:** `@zatgo/space-web`  
 **Port:** 3010  
-**Role:** Self-serve wizard to create ERPNext sites as `{slug}.zatgo.online` on the **shared Docker bench**.
+**Role:** Self-serve wizard to create ERPNext sites as `{slug}.zatgoinnovation.com` on the **shared Docker bench**.
 
 ## Architecture (Docker-first)
 
 ```
 Docker bench (frappe_docker-backend-1)
-├── erp.zatgo.online      ← one site (ERP), not the Space control plane
-├── {slug}.zatgo.online   ← Space-created customer sites
+├── erp.zatgoinnovation.com      ← one site (ERP), not the Space control plane
+├── {slug}.zatgoinnovation.com   ← Space-created customer sites
 └── apps/                 ← get-app packages (wizard Apps list)
 ```
 
-space-web connects to the **bench via SSH**, not to `erp.zatgo.online` APIs.
+space-web connects to the **bench via SSH**, not to `erp.zatgoinnovation.com` APIs.
 
 | Concern | Source |
 |---------|--------|
@@ -33,9 +33,9 @@ pnpm --filter @zatgo/space-web dev
 
 Open http://localhost:3010 · Sites dashboard: http://localhost:3010/sites
 
-## Production (`space.zatgo.online`)
+## Production (`space.zatgoinnovation.com`)
 
-Runs on the DigitalOcean droplet (same host as the Docker bench):
+Runs on the Hetzner server (same host as the Docker bench):
 
 ```bash
 # as zatgo
@@ -46,7 +46,7 @@ pnpm build
 # systemd: space-web.service → pnpm start on :3010
 ```
 
-Nginx proxies `https://space.zatgo.online` → `127.0.0.1:3010` (more specific than the `*.zatgo.online` ERPNext vhost).
+Nginx proxies `https://space.zatgoinnovation.com` → `127.0.0.1:3010` (more specific than the `*.zatgoinnovation.com` ERPNext vhost).
 
 On the droplet use `SPACE_BENCH_ENV=local` so Space talks to Docker directly (no SSH hop).
 
@@ -54,8 +54,8 @@ On the droplet use `SPACE_BENCH_ENV=local` so Space talks to Docker directly (no
 
 | Type | Host | Value |
 |------|------|-------|
-| A | `*` | `157.230.8.164` |
-| A | `space` | `157.230.8.164` |
+| A | `*` | `2.29.17.8` |
+| A | `space` | `2.29.17.8` |
 
 Namecheap API is not required for MVP (wildcard covers all slugs).
 

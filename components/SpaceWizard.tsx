@@ -397,7 +397,7 @@ export function SpaceWizard() {
           </div>
         </div>
         <p className="mt-3 max-w-xl text-base text-muted-foreground">
-          Create your ERPNext site on a zatgo.online address — choose apps, pick a plan, and open Desk when it&apos;s
+          Create your ERPNext site on a zatgoinnovation.com address — choose apps, pick a plan, and open Desk when it&apos;s
           ready.
         </p>
         {isTrialFlow && (
@@ -448,7 +448,7 @@ export function SpaceWizard() {
                     autoComplete="off"
                     spellCheck={false}
                   />
-                  <span className="shrink-0 text-sm text-muted-foreground">.{catalog?.domainSuffix || "zatgo.online"}</span>
+                  <span className="shrink-0 text-sm text-muted-foreground">.{catalog?.domainSuffix || "zatgoinnovation.com"}</span>
                 </div>
                 {hostname && (
                   <ul className="mt-4 space-y-1 text-sm text-muted-foreground">
