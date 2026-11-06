@@ -115,8 +115,9 @@ function SitesSkeleton() {
 }
 
 function siteBadgeStatus(site: SiteUsageRow): string {
-  if (!site.onDocker || site.status === "Provisioning") return "Provisioning";
+  if (site.status === "Failed") return "Failed";
   if (site.status === "Suspended") return "Suspended";
+  if (!site.onDocker || site.status === "Provisioning" || site.status === "Draft") return "Provisioning";
   return "Active";
 }
 
@@ -188,7 +189,7 @@ export function SitesDashboard() {
 
   useEffect(() => { void load({ details: false }); }, [load]);
 
-  const readyCount = sites.filter((s) => s.onDocker).length;
+  const readyCount = sites.filter((s) => s.onDocker && s.status !== "Failed").length;
   const memPct = measured && measured.ramLimitMb > 0 ? pct(measured.ramUsedMb, measured.ramLimitMb) : 0;
   const diskPct = measured && measured.diskUsedMb > 0 && pool ? pct(measured.diskUsedMb, measured.diskUsedMb + pool.freeDiskMb) : 0;
   const showSkeleton = loading && sites.length === 0;
@@ -307,7 +308,13 @@ export function SitesDashboard() {
                               {site.hostname}
                             </a>
                             <p className="mt-1 text-sm text-muted-foreground">
-                              {site.planTitle ? `${site.planTitle} plan` : site.kind === "erp" ? "Main company ERP" : "Open Desk to sign in."}
+                              {status === "Failed"
+                                ? "Setup failed. Open Manage, delete this site, and try again."
+                                : site.planTitle
+                                  ? `${site.planTitle} plan`
+                                  : site.kind === "erp"
+                                    ? "Main company ERP"
+                                    : "Open Desk to sign in."}
                             </p>
                           </div>
                           <StatusBadge status={status} />
@@ -358,6 +365,7 @@ export function SitesDashboard() {
                             nativeButton={false}
                             render={<Link href={`/sites/${encodeURIComponent(site.slug)}`}>Manage</Link>}
                           />
+                          {status !== "Failed" && (
                           <Button
                             size="sm"
                             nativeButton={false}
@@ -367,6 +375,7 @@ export function SitesDashboard() {
                               </a>
                             }
                           />
+                          )}
                         </div>
                       </CardContent>
                     </Card>

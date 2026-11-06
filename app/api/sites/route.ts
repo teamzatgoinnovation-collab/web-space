@@ -21,7 +21,9 @@ export async function GET(req: NextRequest) {
         sid,
       );
       const rows = Array.isArray(result) ? result : [];
-      const sites = rows.map((r) => {
+      const sites = rows
+        .filter((r) => String(r.status) !== "Deleted")
+        .map((r) => {
         const domain = String(r.domain || "");
         const slug = String(r.site_name || r.name || "");
         return {
