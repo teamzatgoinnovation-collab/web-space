@@ -7,6 +7,8 @@ import { ArrowLeft, ExternalLink, Boxes } from "lucide-react";
 import { formatMb } from "@/lib/format";
 import { SiteUsageGraph } from "@/components/SiteUsageGraph";
 import { CheckoutPanel, type CheckoutSuccess } from "@/components/CheckoutPanel";
+import { LifecycleCard } from "@/components/LifecycleCard";
+import type { Lifecycle } from "@/lib/lifecycle";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +31,7 @@ type SiteDetail = {
   diskLimitMb: number;
   diskUsedMb: number;
   ramUsedMb: number;
+  lifecycle?: Lifecycle | null;
   installedApps: { package: string; title: string; canUninstall: boolean }[];
   availableApps: { package: string; title: string }[];
   plans: {
@@ -191,6 +194,16 @@ export function SiteManage({ slug }: Props) {
           </AlertDescription>
         </Alert>
       )}
+
+      {/* ── Subscription ── */}
+      <LifecycleCard
+        slug={site.slug}
+        hostname={site.hostname}
+        plan={site.plan || ""}
+        planTitle={site.planTitle || site.plan || ""}
+        lifecycle={site.lifecycle ?? null}
+        onChanged={() => void load()}
+      />
 
       {/* ── Usage ── */}
       <SectionCard

@@ -19,7 +19,7 @@ type Option = {
 type Props = {
   plan: string;
   planTitle: string;
-  purpose: "provision" | "upgrade";
+  purpose: "provision" | "upgrade" | "activate";
   hostname?: string;
   onSuccess: (result: CheckoutSuccess) => void;
   onCancel?: () => void;

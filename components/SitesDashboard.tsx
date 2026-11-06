@@ -1,5 +1,7 @@
 "use client";
 
+import { LifecycleBadge } from "@/components/LifecycleCard";
+import type { Lifecycle } from "@/lib/lifecycle";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Boxes, HardDrive, MemoryStick, AlertCircle, Globe } from "lucide-react";
@@ -319,6 +321,8 @@ export function SitesDashboard() {
                           </div>
                           <StatusBadge status={status} />
                         </div>
+
+                        <LifecycleBadge lifecycle={(site as { lifecycle?: Lifecycle | null }).lifecycle ?? null} />
 
                         {/* App pills */}
                         {detailsLoading && apps.length === 0 ? (

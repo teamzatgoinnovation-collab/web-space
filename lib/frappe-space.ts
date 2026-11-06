@@ -92,6 +92,24 @@ export async function frappeListSubscriptions() {
   return callMethod("space.api.v1.space.list_subscriptions");
 }
 
+/** Record a payment the portal has ALREADY verified with the provider (service credential; idempotent on payment id). */
+export async function frappeRecordPayment(p: {
+  site: string;
+  provider: string;
+  paymentId: string;
+  amount: number;
+  currency: string;
+}) {
+  return callMethod("space.api.lifecycle.record_payment", {
+    site: p.site,
+    provider: p.provider,
+    payment_id: p.paymentId,
+    amount: p.amount,
+    currency: p.currency,
+    months: 1,
+  });
+}
+
 /** Phase 2 v2 methods */
 async function callV2(method: string, body?: Record<string, unknown>) {
   return callMethod(`space.api.v2.space.${method}`, body);

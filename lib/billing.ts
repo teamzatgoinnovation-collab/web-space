@@ -80,8 +80,8 @@ export async function createCheckoutSession(input: {
   if (!plan || !plan.isActive) {
     return { ok: false, error: "Unknown or inactive plan" };
   }
-  if (input.purpose === "upgrade" && !input.hostname?.trim()) {
-    return { ok: false, error: "Hostname required for plan upgrades" };
+  if (input.purpose !== "provision" && !input.hostname?.trim()) {
+    return { ok: false, error: "Hostname required for plan upgrades and activation" };
   }
   const hostname = input.hostname?.trim().toLowerCase() || undefined;
   const currency = (input.currency || "SAR") as Currency;

@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 const Body = z.object({
   plan: z.string().min(1).max(64),
-  purpose: z.enum(["provision", "upgrade"]),
+  purpose: z.enum(["provision", "upgrade", "activate"]),
   hostname: z.string().min(1).max(253).optional(),
   provider: z.enum(["moyasar", "razorpay", "stripe", "paypal"]).optional(),
   currency: z.enum(["SAR", "INR", "USD"]).optional(),

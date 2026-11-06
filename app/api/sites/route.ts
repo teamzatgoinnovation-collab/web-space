@@ -21,6 +21,13 @@ export async function GET(req: NextRequest) {
         sid,
       );
       const rows = Array.isArray(result) ? result : [];
+      let lifecycleBySite: Record<string, unknown> = {};
+      try {
+        lifecycleBySite =
+          (await callMethod<Record<string, unknown>>("space.api.lifecycle.list_lifecycle", undefined, sid)) || {};
+      } catch {
+        lifecycleBySite = {};
+      }
       const sites = rows
         .filter((r) => String(r.status) !== "Deleted")
         .map((r) => {
@@ -40,6 +47,7 @@ export async function GET(req: NextRequest) {
           diskUsedMb: Number(r.storage_used_mb || 0),
           apps: [],
           usageUpdatedAt: null,
+          lifecycle: lifecycleBySite[String(r.name || slug)] ?? null,
           kind: "space" as const,
           inPool: true,
           onDocker: ["Active", "Suspended", "Provisioning"].includes(String(r.status)),

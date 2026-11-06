@@ -75,9 +75,19 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
             // enrichment only — site detail below still renders without it
           }
 
+          // Trial / subscription picture: enrichment, so the page still renders if the platform call fails.
+          let lifecycle: unknown = null;
+          try {
+            const lc = await callMethod<unknown>("space.api.lifecycle.get_lifecycle", { site: String(data.name || slug) }, sid);
+            lifecycle = lc;
+          } catch {
+            lifecycle = null;
+          }
+
           return NextResponse.json({
             ok: true,
             site: {
+              lifecycle,
               name: String(data.name || slug),
               slug: String(data.site_name || slug),
               hostname: domain,

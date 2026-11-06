@@ -5,7 +5,7 @@
 
 export type Currency = "SAR" | "INR" | "USD";
 export type ProviderId = "moyasar" | "razorpay" | "stripe" | "paypal";
-export type PaymentPurpose = "provision" | "upgrade";
+export type PaymentPurpose = "provision" | "upgrade" | "activate";
 
 /** What a verified payment must match: the plan being bought, for whom, how much. */
 export type Expected = {
@@ -55,7 +55,7 @@ export function bindingMatches(binding: string | undefined, expected: Expected):
   const parts = (binding || "").split("|");
   if (parts.length !== 4 || parts[0] !== "space") return false;
   if (parts[1] !== expected.purpose || parts[2] !== expected.plan) return false;
-  if (expected.purpose === "upgrade" && expected.hostname) {
+  if (expected.purpose !== "provision" && expected.hostname) {
     return parts[3] === expected.hostname.toLowerCase();
   }
   return true;

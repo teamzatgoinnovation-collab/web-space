@@ -62,7 +62,7 @@ type Props = {
   plan: string;
   planTitle: string;
   listPriceCents: number;
-  purpose: "provision" | "upgrade";
+  purpose: "provision" | "upgrade" | "activate";
   hostname?: string;
   onSuccess: (result: CheckoutSuccess) => void;
   onCancel?: () => void;
