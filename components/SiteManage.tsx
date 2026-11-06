@@ -149,6 +149,7 @@ export function SiteManage({ slug }: Props) {
           Install or remove apps, change plan, clear cache, or update the site schema.
         </p>
         <div className="mt-4 flex flex-wrap gap-2.5">
+          <Button variant="secondary" nativeButton={false} render={<Link href={`/sites/${encodeURIComponent(site.slug)}/deployments`}>Deployments</Link>} />
           <Button nativeButton={false} render={
             <a href={site.deskUrl} target="_blank" rel="noreferrer">
               Open Desk

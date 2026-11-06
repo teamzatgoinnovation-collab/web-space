@@ -676,6 +676,14 @@ export function SpaceWizard() {
                 {(jobId || job) && (
                   <div className="mt-6 space-y-4">
                     <InstallChecklist job={job} onRetry={retryInstall} busy={busy} />
+                    {slug.trim() && (
+                      <Link
+                        href={`/sites/${encodeURIComponent(slug.trim().toLowerCase())}/deployments`}
+                        className="inline-block text-sm text-primary hover:underline"
+                      >
+                        View full deployment details →
+                      </Link>
+                    )}
                     {job?.status === "succeeded" && job.result?.deskUrl && (
                       <Button nativeButton={false} render={<a href={job.result.deskUrl}>Open ERPNext login</a>} />
                     )}

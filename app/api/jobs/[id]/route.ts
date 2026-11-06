@@ -19,7 +19,9 @@ function safeJobError(rawErrorLog: unknown, devConsole: boolean): string {
 	return GENERIC_JOB_ERROR;
 }
 
-function mapFrappeJob(raw: Record<string, unknown>, id: string, devConsole: boolean) {
+function mapFrappeJob(raw: Record<string, unknown>, id: string, devConsoleFlag: boolean) {
+  // Admins (backend roles) and the dev console see raw output; customers get the safe view.
+  const devConsole = devConsoleFlag || raw.viewer_is_admin === true;
   const statusRaw = String(raw.status || "Queued");
   const progress = Number(raw.progress || 0);
   const statusMap: Record<string, string> = {
@@ -62,6 +64,7 @@ function mapFrappeJob(raw: Record<string, unknown>, id: string, devConsole: bool
     // Real stages derived from the backend's checkpoints (never faked from elapsed time).
     stages: deriveStages(input),
     percent: overallPercent(input),
+    admin: devConsole,
     elapsedMs: elapsedMs(input),
     finishedAt: input.finishedAt,
     // Customers get checkpoint lines and generic warnings; raw output only with the dev console.

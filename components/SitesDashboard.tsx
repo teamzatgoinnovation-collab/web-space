@@ -365,6 +365,12 @@ export function SitesDashboard() {
                             nativeButton={false}
                             render={<Link href={`/sites/${encodeURIComponent(site.slug)}`}>Manage</Link>}
                           />
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            nativeButton={false}
+                            render={<Link href={`/sites/${encodeURIComponent(site.slug)}/deployments`}>Deployments</Link>}
+                          />
                           {status !== "Failed" && (
                           <Button
                             size="sm"
