@@ -4,6 +4,7 @@ import { callMethod, FrappeAuthError } from "@/lib/frappe-customer";
 import { getSid } from "@/lib/require-sid";
 import { getJob } from "@/lib/jobs";
 import { isDevConsoleEnabled } from "@/lib/dev-console";
+import { deriveStages, elapsedMs, logLines, overallPercent, type JobInput, type TimelineEntry } from "@/lib/job-stages";
 
 export const runtime = "nodejs";
 
@@ -32,6 +33,22 @@ function mapFrappeJob(raw: Record<string, unknown>, id: string, devConsole: bool
   const domain =
     site.includes(".") ? site : site ? `${site}.zatgoinnovation.com` : undefined;
 
+  let timeline: TimelineEntry[] = [];
+  try {
+    const t = JSON.parse(String(raw.timeline_json || "[]"));
+    if (Array.isArray(t)) timeline = t as TimelineEntry[];
+  } catch {
+    /* older jobs have no timeline */
+  }
+  const input: JobInput = {
+    status: statusRaw,
+    progress,
+    output: typeof raw.output === "string" ? raw.output : undefined,
+    startedAt: typeof raw.started_at === "string" ? raw.started_at : undefined,
+    finishedAt: typeof raw.finished_at === "string" ? raw.finished_at : undefined,
+    timeline,
+  };
+
   return {
     id,
     status,
@@ -41,8 +58,13 @@ function mapFrappeJob(raw: Record<string, unknown>, id: string, devConsole: bool
         ? { deskUrl: `https://${domain}`, hostname: domain }
         : undefined,
     progress,
-    // The wizard indexes job.stages; the Frappe control plane reports progress/output only.
-    stages: [] as { id: string; label: string; status: string }[],
+    // Real stages derived from the backend's checkpoints (never faked from elapsed time).
+    stages: deriveStages(input),
+    percent: overallPercent(input),
+    elapsedMs: elapsedMs(input),
+    finishedAt: input.finishedAt,
+    // Customers get checkpoint lines and generic warnings; raw output only with the dev console.
+    log: logLines(input, { admin: devConsole }),
     // Developer-authored progress checkpoints ("[25%] Creating site X") — safe by
     // construction, no commands/credentials — powers the customer-facing activity log.
     output: typeof raw.output === "string" ? raw.output : undefined,

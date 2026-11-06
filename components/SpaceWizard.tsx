@@ -6,6 +6,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Check, X as XIcon } from "lucide-react";
 import { DevActivityConsole } from "@/components/DevActivityConsole";
 import { CheckoutPanel, type CheckoutSuccess } from "@/components/CheckoutPanel";
+import { WizardStepper } from "@/components/wizard/WizardStepper";
+import { InstallChecklist } from "@/components/wizard/InstallChecklist";
 import { isDevConsoleEnabled } from "@/lib/dev-console";
 import { formatMb } from "@/lib/format";
 import Link from "next/link";
@@ -47,7 +49,10 @@ type Catalog = {
 type JobView = {
   id: string;
   status: string;
-  stages: { id: string; label: string; status: string }[];
+  stages: { id: string; label: string; status: string; hint?: string; durationMs?: number; log?: string[] }[];
+  percent?: number;
+  elapsedMs?: number;
+  log?: { level: "info" | "warn" | "error"; text: string; stage?: string }[];
   error?: string;
   result?: { deskUrl?: string; hostname?: string };
 };
@@ -409,23 +414,15 @@ export function SpaceWizard() {
         )}
       </header>
 
-      <nav className="mb-8 flex gap-2" aria-label="Steps">
-        {STEPS.map((label, i) => (
-          <div
-            key={label}
-            className={cn(
-              "flex-1 rounded-full py-2 text-center text-xs font-medium sm:text-sm",
-              i === step
-                ? "bg-foreground text-background"
-                : i < step
-                  ? "bg-primary/15 text-primary"
-                  : "bg-secondary text-muted-foreground",
-            )}
-          >
-            {label}
-          </div>
-        ))}
-      </nav>
+      <WizardStepper
+        steps={STEPS}
+        current={step}
+        canGoTo={(i) => !jobId && !busy && i < 3}
+        onGoTo={(i) => {
+          setError(null);
+          setStep(i);
+        }}
+      />
 
       <Card className="relative overflow-hidden p-6 sm:p-8">
         <AnimatePresence mode="wait">
@@ -678,74 +675,11 @@ export function SpaceWizard() {
                 )}
                 {(jobId || job) && (
                   <div className="mt-6 space-y-4">
-                    {(!job || job.status === "queued" || job.status === "running") && (
-                      <div className="rounded-xl bg-primary/10 px-4 py-3 text-sm text-foreground">
-                        <div className="flex items-center justify-between gap-3">
-                          <span>{activeHint}</span>
-                          <span className="font-semibold text-primary tabular-nums">{overallPercent}%</span>
-                        </div>
-                        <Progress value={overallPercent} className="mt-2" />
-                      </div>
-                    )}
-                    {job?.status === "succeeded" && (
-                      <p className="rounded-xl bg-primary/10 px-4 py-3 text-sm font-medium text-primary">
-                        Your site is ready — 100%
-                      </p>
-                    )}
-                    <ol className="space-y-4">
-                      {INSTALL_STEPS.map((stepDef, index) => {
-                        const status = resolveStageStatus(stepDef.id, index, job, jobId);
-                        const pctVal = stepPercents[index] ?? 0;
-                        return (
-                          <li key={stepDef.id} className="flex gap-3 text-sm">
-                            <StageIcon status={status} />
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center justify-between gap-2">
-                                <span
-                                  className={cn(
-                                    status === "succeeded" && "font-medium text-foreground",
-                                    status === "running" && "font-medium text-primary",
-                                    status === "failed" && "font-medium text-destructive",
-                                    status === "pending" && "text-muted-foreground",
-                                  )}
-                                >
-                                  {stepDef.label}
-                                  {status === "failed" ? " — failed" : ""}
-                                </span>
-                                <span
-                                  className={cn(
-                                    "text-xs font-semibold tabular-nums",
-                                    (status === "succeeded" || status === "running") && "text-primary",
-                                    status === "failed" && "text-destructive",
-                                    status === "pending" && "text-muted-foreground/60",
-                                  )}
-                                >
-                                  {pctVal}%
-                                </span>
-                              </div>
-                              <Progress value={pctVal} className={cn("mt-1.5 h-1.5", status === "failed" && "[&>div]:bg-destructive")} />
-                            </div>
-                          </li>
-                        );
-                      })}
-                    </ol>
+                    <InstallChecklist job={job} onRetry={retryInstall} busy={busy} />
                     {job?.status === "succeeded" && job.result?.deskUrl && (
                       <Button nativeButton={false} render={<a href={job.result.deskUrl}>Open ERPNext login</a>} />
                     )}
-                    {job?.status === "failed" && (
-                      <Alert variant="destructive">
-                        <AlertDescription>
-                          <p className="font-semibold">Installation could not finish</p>
-                          {failedStepLabel && <p className="mt-1 opacity-80">Stopped at: {failedStepLabel}</p>}
-                          <p className="mt-2">
-                            {job.error || "Something went wrong while creating your site. Please try again."}
-                          </p>
-                          <Button variant="destructive" disabled={busy} onClick={retryInstall} className="mt-3">
-                            {busy ? "Starting…" : "Try again"}
-                          </Button>
-                        </AlertDescription>
-                      </Alert>
-                    )}
+
                   </div>
                 )}
               </section>
