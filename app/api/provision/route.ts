@@ -1,28 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
 import { rateLimitOk } from "@/lib/bench";
-import { assertPaidCheckout } from "@/lib/billing";
 import { frappeControlEnabled } from "@/lib/frappe-space";
 import { callMethod, FrappeAuthError } from "@/lib/frappe-customer";
 import { getSid } from "@/lib/require-sid";
+import { parseProvisionRequest } from "@/lib/provision-request";
 import { startProvisionJob } from "@/lib/provision";
 
 export const runtime = "nodejs";
-
-const Body = z.object({
-  slug: z.string().min(1).max(63),
-  adminPassword: z.string().min(8).max(128),
-  apps: z.array(z.string()).default(["frappe", "erpnext"]),
-  plan: z.string().min(1),
-  checkoutSessionId: z.string().min(8).max(256),
-  currency: z.enum(["SAR", "INR", "USD"]).optional(),
-  paymentMethod: z.enum(["Stripe"]).optional(),
-  preferredRegion: z.string().min(1).max(64).optional(),
-  companyName: z.string().min(1).max(140).optional(),
-  warehouseName: z.string().min(1).max(140).optional(),
-  adminFullName: z.string().min(1).max(140).optional(),
-  adminEmail: z.string().email().max(140).optional(),
-});
 
 export async function POST(req: NextRequest) {
   const ip =
@@ -40,23 +24,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Invalid JSON" }, { status: 400 });
   }
 
-  const parsed = Body.safeParse(json);
-  if (!parsed.success) {
-    return NextResponse.json(
-      { ok: false, error: parsed.error.issues[0]?.message || "Invalid body" },
-      { status: 400 },
-    );
+  // No payment and no plan choice at creation: the first month is free and every site starts on the trial plan
+  // (lib/trial.ts). The plan is fixed by the parser, so nothing the browser sends can change it.
+  const parsed = parseProvisionRequest(json);
+  if (!parsed.ok) {
+    return NextResponse.json({ ok: false, error: parsed.error }, { status: 400 });
   }
-
-  const paid = await assertPaidCheckout({
-    sessionId: parsed.data.checkoutSessionId,
-    plan: parsed.data.plan,
-    purpose: "provision",
-    currency: parsed.data.currency,
-  });
-  if (!paid.ok) {
-    return NextResponse.json({ ok: false, error: paid.error }, { status: 402 });
-  }
+  const request = parsed.data;
 
   try {
     if (frappeControlEnabled()) {
@@ -64,27 +38,24 @@ export async function POST(req: NextRequest) {
       if (!sid) {
         return NextResponse.json({ ok: false, error: "Login required" }, { status: 401 });
       }
-      const useV4 = Boolean(parsed.data.preferredRegion);
+      const useV4 = Boolean(request.preferredRegion);
       const customSetup = {
-        ...(parsed.data.companyName ? { company_name: parsed.data.companyName } : {}),
-        ...(parsed.data.warehouseName ? { warehouse_name: parsed.data.warehouseName } : {}),
-        ...(parsed.data.adminFullName ? { admin_full_name: parsed.data.adminFullName } : {}),
-        ...(parsed.data.adminEmail ? { admin_email: parsed.data.adminEmail } : {}),
+        ...(request.companyName ? { company_name: request.companyName } : {}),
       };
       const data = await callMethod<{ job?: string; site?: string; domain?: string }>(
         useV4 ? "space.api.v4.space.create_site_v4" : "space.api.v1.space.create_site",
         useV4
           ? {
-              site_name: parsed.data.slug,
-              plan: parsed.data.plan,
-              admin_password: parsed.data.adminPassword,
-              preferred_region: parsed.data.preferredRegion,
+              site_name: request.slug,
+              plan: request.plan,
+              admin_password: request.adminPassword,
+              preferred_region: request.preferredRegion,
               ...customSetup,
             }
           : {
-              site_name: parsed.data.slug,
-              plan: parsed.data.plan,
-              admin_password: parsed.data.adminPassword,
+              site_name: request.slug,
+              plan: request.plan,
+              admin_password: request.adminPassword,
               ...customSetup,
             },
         sid,
@@ -93,22 +64,21 @@ export async function POST(req: NextRequest) {
         ok: true,
         jobId: data?.job,
         site: data?.site,
-        checkoutSessionId: paid.session.id,
         controlPlane: "space",
         api: useV4 ? "v4" : "v1",
       });
     }
 
     const jobId = startProvisionJob({
-      slug: parsed.data.slug,
-      adminPassword: parsed.data.adminPassword,
-      apps: parsed.data.apps,
-      plan: parsed.data.plan,
+      slug: request.slug,
+      adminPassword: request.adminPassword,
+      apps: ["frappe", "erpnext"],
+      plan: request.plan,
       paymentMethod: "Stripe",
-      checkoutSessionId: paid.session.id,
+      checkoutSessionId: "trial",
     });
 
-    return NextResponse.json({ ok: true, jobId, checkoutSessionId: paid.session.id });
+    return NextResponse.json({ ok: true, jobId });
   } catch (err) {
     if (err instanceof FrappeAuthError) {
       return NextResponse.json({ ok: false, error: err.message }, { status: 401 });

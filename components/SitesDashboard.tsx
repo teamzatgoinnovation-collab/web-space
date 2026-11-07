@@ -207,12 +207,11 @@ export function SitesDashboard() {
             Your sites
           </h1>
           <p className="mt-2.5 max-w-md text-sm leading-relaxed text-muted-foreground">
-            See each site&apos;s address, storage, and apps. Manage apps and plans, or open Desk to sign in.
+            See each site&apos;s address, trial or subscription, storage and apps. Manage your plan, or open Desk to sign in.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2.5">
-          <Button nativeButton={false} render={<Link href="/new?plan=pro&trial=1">Try SpaceCloud</Link>} />
-          <Button variant="secondary" nativeButton={false} render={<Link href="/new">+ New site</Link>} />
+          <Button nativeButton={false} render={<Link href="/new">Start 1 month free</Link>} />
           <Button variant="secondary" disabled={busy} onClick={() => void load({ soft: true, details: true })}>
             {busy && !showSkeleton ? "Updating…" : "Refresh"}
           </Button>
@@ -284,8 +283,8 @@ export function SitesDashboard() {
                     <Globe className="size-6 text-muted-foreground" />
                   </div>
                   <p className="font-semibold text-foreground">No sites yet</p>
-                  <p className="text-sm text-muted-foreground">Try SpaceCloud free for 14 days to get started.</p>
-                  <Button className="mt-1" nativeButton={false} render={<Link href="/new?plan=pro&trial=1">Try SpaceCloud</Link>} />
+                  <p className="text-sm text-muted-foreground">Start with 1 month free: every ZatGo app is included.</p>
+                  <Button className="mt-1" nativeButton={false} render={<Link href="/new">Start 1 month free</Link>} />
                 </CardContent>
               </Card>
             ) : (

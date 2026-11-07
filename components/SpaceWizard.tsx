@@ -5,11 +5,9 @@ import { useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, X as XIcon } from "lucide-react";
 import { DevActivityConsole } from "@/components/DevActivityConsole";
-import { CheckoutPanel, type CheckoutSuccess } from "@/components/CheckoutPanel";
 import { WizardStepper } from "@/components/wizard/WizardStepper";
 import { InstallChecklist } from "@/components/wizard/InstallChecklist";
 import { isDevConsoleEnabled } from "@/lib/dev-console";
-import { formatMb } from "@/lib/format";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,32 +16,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { cn } from "@/lib/utils";
+import { validateSiteStep } from "@/lib/site-step";
 
 type Catalog = {
   domainSuffix: string;
-  apps: { package: string; title: string; required?: boolean }[];
-  plans: {
-    code: string;
-    title: string;
-    mock_price: string;
-    priceCents?: number;
-    dueTodayCents?: number;
-    features: string[];
-    ramLimitMb?: number;
-    diskLimitMb?: number;
-    allowed_apps?: { package: string; title: string }[];
-  }[];
-  pool?: {
-    ramPoolMb?: number;
-    diskPoolMb?: number;
-    allocatedRamMb?: number;
-    allocatedDiskMb?: number;
-    freeRamMb?: number;
-    freeDiskMb?: number;
-    siteCount?: number;
-  };
-  billing?: { mode?: string; message?: string };
 };
 
 type JobView = {
@@ -57,14 +33,14 @@ type JobView = {
   result?: { deskUrl?: string; hostname?: string };
 };
 
-const STEPS = ["Site", "Plan", "Apps", "Pay", "Install"] as const;
+const STEPS = ["Site", "Install"] as const;
 
 /** Friendly install checklist — labels only, no ops/workflow secrets. */
 const INSTALL_STEPS = [
   { id: "validate", label: "Checking your site name", typicalMs: 20_000 },
   { id: "dns", label: "Connecting your subdomain", typicalMs: 30_000 },
   { id: "new-site", label: "Creating your ERP site", typicalMs: 15 * 60_000 },
-  { id: "apps", label: "Installing selected apps", typicalMs: 8 * 60_000 },
+  { id: "apps", label: "Installing your ZatGo apps", typicalMs: 8 * 60_000 },
   { id: "cache", label: "Finishing setup", typicalMs: 60_000 },
 ] as const;
 
@@ -150,15 +126,8 @@ export function SpaceWizard() {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [companyName, setCompanyName] = useState("");
-  const [warehouseName, setWarehouseName] = useState("");
-  const [adminFullName, setAdminFullName] = useState("");
-  const [adminEmail, setAdminEmail] = useState("");
-  const [plan, setPlan] = useState(() => searchParams.get("plan") || "basic");
   const [preferredRegion, setPreferredRegion] = useState("");
   const [regions, setRegions] = useState<{ name?: string; title?: string }[]>([]);
-  const [checkoutSessionId, setCheckoutSessionId] = useState<string | null>(null);
-  const [checkoutCurrency, setCheckoutCurrency] = useState<string | null>(null);
-  const [paidCard, setPaidCard] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
@@ -283,48 +252,13 @@ export function SpaceWizard() {
     return `${s}.${catalog.domainSuffix}`;
   }, [slug, catalog]);
 
-  /** The plan decides which apps get installed — narrow the catalog's full
-   * app list down to what the chosen plan allows (plus the always-on core).
-   * Every app here is installed automatically; there's no per-app opt-out at
-   * creation time (the provisioning job always installs the plan's full
-   * allowed-apps list, not a client-picked subset) — so this list is
-   * informational, not a set of checkboxes. */
-  const selectedPlan = useMemo(() => catalog?.plans.find((p) => p.code === plan), [catalog, plan]);
-  const scopedApps = useMemo(() => {
-    const allowed = new Set((selectedPlan?.allowed_apps || []).map((a) => a.package));
-    return (catalog?.apps || []).filter((app) => app.required || app.package === "frappe" || allowed.has(app.package));
-  }, [catalog, selectedPlan]);
-  const selectedApps = useMemo(() => scopedApps.map((app) => app.package), [scopedApps]);
-
-  const next = () => {
-    setError(null);
-    if (step === 0) {
-      if (!/^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/.test(slug.trim().toLowerCase())) {
-        setError("Enter a valid subdomain (lowercase, numbers, hyphens)");
-        return;
-      }
+  /** One click: validate the Site step, then start the installation (no plan, apps or payment to choose). */
+  const startInstall = useCallback(async () => {
+    const problem = validateSiteStep({ slug, password, confirm });
+    if (problem) {
+      setError(problem);
+      return;
     }
-    if (step === 2) {
-      const hasName = adminFullName.trim().length > 0;
-      const hasEmail = adminEmail.trim().length > 0;
-      if (hasName !== hasEmail) {
-        setError("Enter both your name and email to add a second sign-in, or leave both blank");
-        return;
-      }
-      if (hasEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adminEmail.trim())) {
-        setError("Enter a valid email address");
-        return;
-      }
-    }
-    setStep((s) => Math.min(s + 1, 4));
-  };
-
-  const back = () => {
-    setError(null);
-    setStep((s) => Math.max(s - 1, 0));
-  };
-
-  const startInstall = useCallback(async (sessionId: string, currency?: string) => {
     setBusy(true);
     setError(null);
     setJob(null);
@@ -339,44 +273,26 @@ export function SpaceWizard() {
         body: JSON.stringify({
           slug: slug.trim().toLowerCase(),
           adminPassword: password,
-          apps: selectedApps,
-          plan,
-          checkoutSessionId: sessionId,
-          ...(currency ? { currency } : {}),
           ...(preferredRegion ? { preferredRegion } : {}),
           ...(companyName.trim() ? { companyName: companyName.trim() } : {}),
-          ...(warehouseName.trim() ? { warehouseName: warehouseName.trim() } : {}),
-          ...(adminFullName.trim() ? { adminFullName: adminFullName.trim() } : {}),
-          ...(adminEmail.trim() ? { adminEmail: adminEmail.trim() } : {}),
         }),
       });
       const data = await res.json();
       if (!data.ok) throw new Error(data.error || "Could not start installation");
       setJobId(data.jobId);
-      setStep(4);
+      setStep(1);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
     }
-  }, [slug, password, selectedApps, plan, preferredRegion, companyName, warehouseName, adminFullName, adminEmail]);
-
-  const onCheckoutSuccess = (result: CheckoutSuccess) => {
-    setCheckoutSessionId(result.sessionId);
-    setCheckoutCurrency(result.currency);
-    setPaidCard(result.planTitle);
-    void startInstall(result.sessionId, result.currency);
-  };
+  }, [slug, password, confirm, preferredRegion, companyName]);
 
   const retryInstall = () => {
     setError(null);
     setJob(null);
     setJobId(null);
-    if (checkoutSessionId) {
-      void startInstall(checkoutSessionId, checkoutCurrency ?? undefined);
-    } else {
-      setStep(3);
-    }
+    void startInstall();
   };
 
   const failedStepLabel = useMemo(() => {
@@ -404,7 +320,8 @@ export function SpaceWizard() {
           </div>
         </div>
         <p className="mt-3 max-w-xl text-base text-muted-foreground">
-          Choose your site name, select a monthly plan, and launch your business management system.
+          Choose your site name and set your administrator password. Your first month is free and every ZatGo app is
+          included.
         </p>
         {isTrialFlow && (
           <p className="mt-3 inline-block rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
@@ -416,7 +333,7 @@ export function SpaceWizard() {
       <WizardStepper
         steps={STEPS}
         current={step}
-        canGoTo={(i) => !jobId && !busy && i < 3}
+        canGoTo={(i) => !jobId && !busy && i < 1}
         onGoTo={(i) => {
           setError(null);
           setStep(i);
@@ -434,8 +351,11 @@ export function SpaceWizard() {
           >
             {step === 0 && (
               <section>
-                <h2 className="text-xl font-semibold text-foreground">Choose your subdomain</h2>
-                <p className="mt-1 text-sm text-muted-foreground">Other URLs are set automatically from this name.</p>
+                <h2 className="text-xl font-semibold text-foreground">Create your site</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Your web address is set from the site name. You sign in as <strong>Administrator</strong> with the
+                  password you choose here.
+                </p>
                 <Label className="mt-6 block">Site name</Label>
                 <div className="mt-2 flex items-center gap-2 rounded-xl border border-border bg-background px-3 py-2">
                   <input
@@ -449,15 +369,28 @@ export function SpaceWizard() {
                   <span className="shrink-0 text-sm text-muted-foreground">.{catalog?.domainSuffix || "zatgoinnovation.com"}</span>
                 </div>
                 {hostname && (
-                  <ul className="mt-4 space-y-1 text-sm text-muted-foreground">
-                    <li>
-                      Desk: <strong className="font-medium text-foreground">https://{hostname}</strong>
-                    </li>
-                    <li>
-                      Site name: <strong className="font-medium text-foreground">{hostname}</strong>
-                    </li>
-                  </ul>
+                  <p className="mt-3 text-sm text-muted-foreground">
+                    Your site: <strong className="font-medium text-foreground">https://{hostname}</strong>
+                  </p>
                 )}
+                <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                  <div className="grid gap-1.5">
+                    <Label>Administrator password</Label>
+                    <Input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label>Confirm password</Label>
+                    <Input type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+                  </div>
+                </div>
+                <div className="mt-6 grid gap-1.5 sm:max-w-md">
+                  <Label>Company name (optional)</Label>
+                  <Input
+                    placeholder="e.g. Acme Trading Co"
+                    value={companyName}
+                    onChange={(e) => setCompanyName(e.target.value)}
+                  />
+                </div>
                 {regions.length > 0 && (
                   <div className="mt-6">
                     <Label className="mb-2 block">Preferred region (optional)</Label>
@@ -478,200 +411,12 @@ export function SpaceWizard() {
               </section>
             )}
 
-            {step === 2 && (
-              <section>
-                <h2 className="text-xl font-semibold text-foreground">Apps &amp; Administrator</h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  These apps are included in your {selectedPlan?.title || "selected"} plan and will be installed
-                  automatically. You always sign in as <strong>Administrator</strong>; add your own account below if
-                  you'd like a second, named login too.
-                </p>
-                <div className="mt-6 grid gap-2 sm:grid-cols-2">
-                  {scopedApps.map((app) => (
-                    <div
-                      key={app.package}
-                      className="flex items-center gap-3 rounded-xl border border-primary bg-primary/10 px-4 py-3 text-left text-sm"
-                    >
-                      <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                        <Check className="size-3.5" />
-                      </span>
-                      <div>
-                        <div className="font-medium text-foreground">{app.title}</div>
-                        <div className="text-xs text-muted-foreground">{app.package}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-6 grid gap-4 sm:grid-cols-2">
-                  <div className="grid gap-1.5">
-                    <Label>Password</Label>
-                    <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
-                  </div>
-                  <div className="grid gap-1.5">
-                    <Label>Confirm</Label>
-                    <Input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
-                  </div>
-                </div>
-
-                <div className="mt-8 border-t border-border pt-6">
-                  <h3 className="text-sm font-semibold text-foreground">Custom setup (optional)</h3>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Leave blank for sensible defaults — Saudi Arabia / SAR, a "Stores" warehouse, and Administrator
-                    as the only sign-in user.
-                  </p>
-                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                    <div className="grid gap-1.5">
-                      <Label>Company name</Label>
-                      <Input
-                        placeholder="e.g. Acme Trading Co"
-                        value={companyName}
-                        onChange={(e) => setCompanyName(e.target.value)}
-                      />
-                    </div>
-                    <div className="grid gap-1.5">
-                      <Label>Default warehouse name</Label>
-                      <Input
-                        placeholder="e.g. Main Warehouse"
-                        value={warehouseName}
-                        onChange={(e) => setWarehouseName(e.target.value)}
-                      />
-                    </div>
-                    <div className="grid gap-1.5">
-                      <Label>Your name (adds a second sign-in)</Label>
-                      <Input
-                        placeholder="Full name"
-                        value={adminFullName}
-                        onChange={(e) => setAdminFullName(e.target.value)}
-                      />
-                    </div>
-                    <div className="grid gap-1.5">
-                      <Label>Your email</Label>
-                      <Input
-                        type="email"
-                        placeholder="you@example.com"
-                        value={adminEmail}
-                        onChange={(e) => setAdminEmail(e.target.value)}
-                      />
-                    </div>
-                  </div>
-                  {(adminFullName.trim() || adminEmail.trim()) && (!adminFullName.trim() || !adminEmail.trim()) && (
-                    <p className="mt-2 text-xs text-amber-500">
-                      Enter both your name and email to add a second sign-in — otherwise only Administrator is
-                      created.
-                    </p>
-                  )}
-                </div>
-              </section>
-            )}
-
             {step === 1 && (
-              <section>
-                <h2 className="text-xl font-semibold text-foreground">Billing plan</h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Choose your monthly plan. Start with 1 month free, then pay monthly via Moyasar. No mandatory annual
-                  subscription.
-                </p>
-                {catalog?.pool && catalog.pool.freeRamMb != null && catalog.pool.freeDiskMb != null && (
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    Available: {formatMb(catalog.pool.freeRamMb)} memory · {formatMb(catalog.pool.freeDiskMb)} storage
-                  </p>
-                )}
-                <div className="mt-6 grid gap-3">
-                  {(catalog?.plans || []).map((p) => {
-                    const ram = p.ramLimitMb ?? 0;
-                    const disk = p.diskLimitMb ?? 0;
-                    // Only enforce capacity limits when the catalog actually reports free capacity —
-                    // treat missing/unknown pool numbers as "don't block", never as "zero available".
-                    const fitsRam = catalog?.pool?.freeRamMb == null || catalog.pool.freeRamMb >= ram;
-                    const fitsDisk = catalog?.pool?.freeDiskMb == null || catalog.pool.freeDiskMb >= disk;
-                    const fits = fitsRam && fitsDisk;
-                    const listCents = p.priceCents ?? 0;
-                    return (
-                      <button
-                        key={p.code}
-                        type="button"
-                        disabled={!fits}
-                        onClick={() => {
-                          setPlan(p.code);
-                          setCheckoutSessionId(null);
-                          setPaidCard(null);
-                        }}
-                        className={cn(
-                          "rounded-xl border px-4 py-4 text-left transition",
-                          plan === p.code ? "border-primary bg-primary/10" : "border-border bg-background",
-                          !fits && "cursor-not-allowed opacity-50",
-                        )}
-                      >
-                        <div className="flex items-baseline justify-between gap-3">
-                          <span className="font-semibold text-foreground">{p.title}</span>
-                          <span className="text-right text-sm">
-                            {listCents > 0 ? (
-                              <span className="font-semibold text-primary">{(listCents / 100).toFixed(2)} SAR/mo</span>
-                            ) : (
-                              <span className="font-semibold text-primary">Free</span>
-                            )}
-                          </span>
-                        </div>
-                        {(ram > 0 || disk > 0) && (
-                          <p className="mt-1.5 text-sm font-medium text-primary">
-                            {formatMb(ram)} RAM · {formatMb(disk)} disk
-                          </p>
-                        )}
-                        {!fits && (
-                          <p className="mt-1 text-xs text-amber-500">
-                            Not enough capacity left — pick a smaller plan or free a site
-                          </p>
-                        )}
-                        <ul className="mt-2 list-inside list-disc text-xs text-muted-foreground">
-                          {p.features.map((f) => (
-                            <li key={f}>{f}</li>
-                          ))}
-                        </ul>
-                      </button>
-                    );
-                  })}
-                </div>
-              </section>
-            )}
-
-            {step === 3 && (
-              <section>
-                <h2 className="text-xl font-semibold text-foreground">Payment</h2>
-                <p className="mt-1 mb-5 text-sm text-muted-foreground">Choose how to pay to start your subscription.</p>
-                {(() => {
-                  const selected = (catalog?.plans || []).find((p) => p.code === plan);
-                  return (
-                    <CheckoutPanel
-                      plan={plan}
-                      planTitle={selected?.title || plan}
-                      purpose="provision"
-                      onSuccess={onCheckoutSuccess}
-                      onCancel={() => setStep(1)}
-                    />
-                  );
-                })()}
-                {paidCard && <p className="mt-3 text-sm text-primary">Payment confirmed — {paidCard} plan.</p>}
-              </section>
-            )}
-
-            {step === 4 && (
               <section>
                 <h2 className="text-xl font-semibold text-foreground">Installing</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
                   {hostname ? `Setting up ${hostname}` : "We will set up your site and open your ERP when ready."}
                 </p>
-                {!jobId && !job && (
-                  <Button
-                    disabled={busy || !checkoutSessionId}
-                    onClick={() => {
-                      if (checkoutSessionId) void startInstall(checkoutSessionId, checkoutCurrency ?? undefined);
-                      else setStep(3);
-                    }}
-                    className="mt-6"
-                  >
-                    {busy ? "Starting…" : "Start installation"}
-                  </Button>
-                )}
                 {(jobId || job) && (
                   <div className="mt-6 space-y-4">
                     <InstallChecklist job={job} onRetry={retryInstall} busy={busy} />
@@ -700,38 +445,19 @@ export function SpaceWizard() {
           <Button
             type="button"
             variant="ghost"
-            onClick={back}
-            disabled={
-              step === 0 ||
-              busy ||
-              step === 3 ||
-              (Boolean(jobId) && job?.status !== "failed" && job?.status !== "succeeded")
-            }
+            onClick={() => {
+              setError(null);
+              setJob(null);
+              setJobId(null);
+              setStep(0);
+            }}
+            disabled={step === 0 || busy || (Boolean(jobId) && job?.status !== "failed" && job?.status !== "succeeded")}
           >
             Back
           </Button>
-          {step < 2 && (
-            <Button type="button" onClick={next}>
-              Continue
-            </Button>
-          )}
-          {step === 2 && (
-            <Button
-              type="button"
-              onClick={() => {
-                setError(null);
-                if (password.length < 8) {
-                  setError("Administrator password must be at least 8 characters");
-                  return;
-                }
-                if (password !== confirm) {
-                  setError("Passwords do not match");
-                  return;
-                }
-                setStep(3);
-              }}
-            >
-              Continue to payment
+          {step === 0 && (
+            <Button type="button" onClick={() => void startInstall()} disabled={busy}>
+              {busy ? "Starting…" : "Create my site"}
             </Button>
           )}
         </CardContent>
