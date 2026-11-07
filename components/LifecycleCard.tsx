@@ -81,7 +81,12 @@ export function LifecycleCard({
       const data = await res.json();
       if (!data.ok) throw new Error(data.error || "Could not activate");
       setShowCheckout(false);
-      setNotice("Thank you. Your subscription is active.");
+      // A site an admin suspended keeps its suspension: the payment is credited, nothing is lost, support reactivates it.
+      setNotice(
+        data.data?.suspended
+          ? "Payment received. This site was suspended by our team, so it stays suspended until support reactivates it."
+          : "Thank you. Your subscription is active.",
+      );
       onChanged();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not activate");
