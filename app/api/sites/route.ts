@@ -25,7 +25,8 @@ export async function GET(req: NextRequest) {
       try {
         lifecycleBySite =
           (await callMethod<Record<string, unknown>>("space.api.lifecycle.list_lifecycle", undefined, sid)) || {};
-      } catch {
+      } catch (e) {
+        console.error("lifecycle fetch failed:", e instanceof Error ? e.message : e);
         lifecycleBySite = {};
       }
       const sites = rows

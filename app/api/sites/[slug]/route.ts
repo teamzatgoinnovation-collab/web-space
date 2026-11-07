@@ -80,7 +80,8 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
           try {
             const lc = await callMethod<unknown>("space.api.lifecycle.get_lifecycle", { site: String(data.name || slug) }, sid);
             lifecycle = lc;
-          } catch {
+          } catch (e) {
+        console.error("lifecycle fetch failed:", e instanceof Error ? e.message : e);
             lifecycle = null;
           }
 
