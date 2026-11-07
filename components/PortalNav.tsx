@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Cloud, LogOut, Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { describeLifecycle, type Lifecycle } from "@/lib/lifecycle";
 
 const LINKS = [
   { href: "/", label: "Sites" },
@@ -12,6 +13,46 @@ const LINKS = [
   { href: "/plan", label: "Plan" },
   { href: "/profile", label: "Profile" },
 ];
+
+const PILL_TONE: Record<string, string> = {
+  info: "border-sky-500/40 bg-sky-500/10 text-sky-700",
+  success: "border-emerald-500/40 bg-emerald-500/10 text-emerald-700",
+  warning: "border-amber-500/40 bg-amber-500/10 text-amber-700",
+  danger: "border-red-500/40 bg-red-500/10 text-red-700",
+};
+
+/** Trial / subscription pill: the site closest to needing attention. */
+function SubscriptionPill() {
+  const [pill, setPill] = useState<{ text: string; tone: string } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/sites", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => {
+        if (!alive || !j?.ok) return;
+        const now = Date.now();
+        const items = ((j.sites || []) as Array<{ lifecycle?: Lifecycle | null }>)
+          .map((s) => ({ lc: s.lifecycle ?? null, d: describeLifecycle(s.lifecycle ?? null, now) }))
+          .filter((x) => x.lc && x.d);
+        if (!items.length) return;
+        const rank = { danger: 0, warning: 1, info: 2, success: 3 } as const;
+        items.sort((a, b) => rank[a.d!.tone] - rank[b.d!.tone] || (a.lc!.remaining_days ?? 999) - (b.lc!.remaining_days ?? 999));
+        const { lc, d } = items[0];
+        const text = lc!.lifecycle_status === "TRIAL" && lc!.remaining_days !== null
+          ? `Free trial · ${lc!.remaining_days} day${lc!.remaining_days === 1 ? "" : "s"} left`
+          : d!.label;
+        setPill({ text, tone: d!.tone });
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
+  if (!pill) return null;
+  return (
+    <Link href="/plan" className={cn("whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold", PILL_TONE[pill.tone])}>
+      {pill.text}
+    </Link>
+  );
+}
 
 export function PortalNav() {
   const path = usePathname() || "/";
@@ -47,6 +88,7 @@ export function PortalNav() {
         {!isAuthPage && (
           <>
             <nav className="hidden items-center gap-1 sm:flex">
+              <SubscriptionPill />
               {LINKS.map((link) => (
                 <Link
                   key={link.href}
@@ -86,6 +128,7 @@ export function PortalNav() {
 
       {!isAuthPage && menuOpen && (
         <nav className="flex flex-col gap-0.5 border-t border-border bg-background px-4 py-2 sm:hidden">
+          <div className="px-3 py-1.5"><SubscriptionPill /></div>
           {LINKS.map((link) => (
             <Link
               key={link.href}
