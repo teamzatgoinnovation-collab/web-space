@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { rateLimitOk } from "@/lib/bench";
 import { createCheckoutSession } from "@/lib/billing";
+import { billingPeriodForSite } from "@/lib/site-period";
+import { getSid } from "@/lib/require-sid";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,7 +37,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Invalid request" }, { status: 400 });
   }
 
-  const result = await createCheckoutSession(parsed.data);
+  // An activation is priced for the site's billing period, read from the platform with the customer's session.
+  let period: "Monthly" | "Yearly" = "Monthly";
+  if (parsed.data.purpose === "activate" && parsed.data.hostname) {
+    const sid = await getSid();
+    if (!sid) return NextResponse.json({ ok: false, error: "Not signed in." }, { status: 401 });
+    period = await billingPeriodForSite(parsed.data.hostname, sid).catch(() => "Monthly" as const);
+  }
+  const result = await createCheckoutSession({ ...parsed.data, period });
   if (!result.ok) {
     return NextResponse.json({ ok: false, error: result.error }, { status: 400 });
   }

@@ -19,7 +19,7 @@
  */
 
 import { getPlan } from "./control-plane";
-import { priceCents } from "./payments/pricing";
+import { priceCents, type BillingPeriod } from "./payments/pricing";
 import { activeProviders, availableCurrencies, getProvider, splitSessionId, verifySession } from "./payments/registry";
 import type { Currency, PaymentPurpose, ProviderId } from "./payments/types";
 
@@ -43,20 +43,22 @@ export type CheckoutSession = {
 };
 
 /** What the wizard offers for a plan: currencies, each with its price and providers. */
-export function checkoutOptions(planCode: string): {
+export function checkoutOptions(planCode: string, period: BillingPeriod = "Monthly"): {
+  period: BillingPeriod;
   currencies: { currency: Currency; priceCents: number; providers: { id: ProviderId; label: string; methods: string[] }[] }[];
 } {
   const plan = getPlan(planCode);
-  if (!plan || !plan.isActive) return { currencies: [] };
+  if (!plan || !plan.isActive) return { period, currencies: [] };
   // A free plan needs no gateway, so it is always available (in the default currency).
   if ((priceCents(planCode, "SAR") ?? 1) === 0) {
-    return { currencies: [{ currency: "SAR", priceCents: 0, providers: [] }] };
+    return { period, currencies: [{ currency: "SAR", priceCents: 0, providers: [] }] };
   }
   const active = activeProviders();
   return {
+    period,
     currencies: availableCurrencies(planCode).map((currency) => ({
       currency,
-      priceCents: priceCents(planCode, currency)!,
+      priceCents: priceCents(planCode, currency, process.env, period)!,
       providers: active
         .filter((p) => p.currencies.includes(currency))
         .map((p) => ({ id: p.id, label: p.label, methods: p.methods })),
@@ -75,6 +77,8 @@ export async function createCheckoutSession(input: {
   hostname?: string;
   provider?: string;
   currency?: string;
+  /** Set by the server from the site's platform record, never from the browser. */
+  period?: BillingPeriod;
 }): Promise<{ ok: true; session: CheckoutSession } | { ok: false; error: string }> {
   const plan = getPlan(input.plan);
   if (!plan || !plan.isActive) {
@@ -85,7 +89,7 @@ export async function createCheckoutSession(input: {
   }
   const hostname = input.hostname?.trim().toLowerCase() || undefined;
   const currency = (input.currency || "SAR") as Currency;
-  const amountCents = priceCents(plan.code, currency);
+  const amountCents = priceCents(plan.code, currency, process.env, input.period ?? "Monthly");
   if (amountCents === undefined) return { ok: false, error: "This plan is not available in that currency." };
 
   const base = {
@@ -130,6 +134,7 @@ export async function assertPaidCheckout(opts: {
   purpose: CheckoutPurpose;
   hostname?: string;
   currency?: string;
+  period?: BillingPeriod;
 }): Promise<{ ok: true; session: { id: string } } | { ok: false; error: string }> {
   const sessionId = opts.sessionId?.trim();
   if (!sessionId) {
@@ -149,7 +154,7 @@ export async function assertPaidCheckout(opts: {
   const { provider } = splitSessionId(sessionId);
   const p = getProvider(provider);
   const currency = ((opts.currency as Currency | undefined) || p?.currencies[0] || "SAR") as Currency;
-  const amountCents = priceCents(plan.code, currency);
+  const amountCents = priceCents(plan.code, currency, process.env, opts.period ?? "Monthly");
   if (amountCents === undefined) return { ok: false, error: "Unexpected payment currency." };
 
   const r = await verifySession(sessionId, {

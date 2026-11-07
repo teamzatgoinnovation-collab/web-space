@@ -111,6 +111,7 @@ function RazorpayLauncher({
 export function CheckoutPanel(props: Props) {
   const { plan, planTitle, onCancel, onSuccess } = props;
   const [options, setOptions] = useState<Option[] | null>(null);
+  const [period, setPeriod] = useState<"Monthly" | "Yearly">("Monthly");
   const [currency, setCurrency] = useState<Currency | null>(null);
   const [provider, setProvider] = useState<ProviderId | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -120,11 +121,16 @@ export function CheckoutPanel(props: Props) {
     let cancelled = false;
     void (async () => {
       try {
-        const res = await fetch(`/api/billing/options?plan=${encodeURIComponent(plan)}`);
+        const res = await fetch(
+          `/api/billing/options?plan=${encodeURIComponent(plan)}${
+            props.purpose === "activate" && props.hostname ? `&site=${encodeURIComponent(props.hostname)}` : ""
+          }`,
+        );
         const data = await res.json();
         if (!data.ok) throw new Error(data.error || "Could not load payment options");
         if (cancelled) return;
         const opts = data.currencies as Option[];
+        setPeriod(data.period === "Yearly" ? "Yearly" : "Monthly");
         setOptions(opts);
         const preferred = currencyForLocale(navigator.language);
         const first = opts.find((o) => o.currency === preferred) || opts[0];
@@ -176,7 +182,7 @@ export function CheckoutPanel(props: Props) {
             <h3 className="mt-1 text-lg font-semibold text-foreground">Subscribe to {planTitle}</h3>
           </div>
           <p className="text-base font-semibold tabular-nums text-primary">
-            {current ? (current.priceCents > 0 ? `${formatMoney(current.priceCents, current.currency)}/mo` : "Free") : ""}
+            {current ? (current.priceCents > 0 ? `${formatMoney(current.priceCents, current.currency)}${period === "Yearly" ? "/yr" : "/mo"}` : "Free") : ""}
           </p>
         </div>
       </CardHeader>

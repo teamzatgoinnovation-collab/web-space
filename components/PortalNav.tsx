@@ -40,7 +40,9 @@ function SubscriptionPill() {
         const { lc, d } = items[0];
         const text = lc!.lifecycle_status === "TRIAL" && lc!.remaining_days !== null
           ? `Free trial · ${lc!.remaining_days} day${lc!.remaining_days === 1 ? "" : "s"} left`
-          : d!.label;
+          : lc!.lifecycle_status === "ACTIVE" && !lc!.protected && lc!.billing_period
+            ? `Active · ${lc!.billing_period}`
+            : d!.label;
         setPill({ text, tone: d!.tone });
       })
       .catch(() => {});

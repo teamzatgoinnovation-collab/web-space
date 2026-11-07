@@ -119,8 +119,14 @@ export function PlanPageClient() {
                 {d && lc ? (
                   <>
                     <p className="text-muted-foreground">{d.headline}</p>
-                    <p>Plan: {s.plan}{lc.monthly_price ? ` · ${lc.monthly_price} SAR / month after the trial` : ""}</p>
-                    <p>Trial: {(lc.trial_started_at || "-").slice(0, 10)} to {(lc.trial_ends_at || "-").slice(0, 10)}</p>
+                    <p>
+                      Plan: {s.plan}
+                      {lc.period_price
+                        ? ` · ${lc.period_price} SAR / ${lc.billing_period === "Yearly" ? "year" : "month"}${lc.lifecycle_status === "TRIAL" ? " after the trial" : ""}`
+                        : ""}
+                    </p>
+                    <p>Billing: {lc.billing_period === "Yearly" ? "Yearly" : "Monthly"}</p>
+                    {lc.trial_started_at && <p>Trial: {lc.trial_started_at.slice(0, 10)} to {(lc.trial_ends_at || "-").slice(0, 10)}</p>}
                     {lc.remaining_days !== null && <p>Days left: {lc.remaining_days}</p>}
                     <p>Next billing: {lc.next_billing_date || "-"}</p>
                     <a className="mt-1 font-semibold text-primary hover:underline" href={`/sites/${encodeURIComponent(s.slug)}`}>

@@ -114,8 +114,9 @@ export function LifecycleCard({
   const rows: [string, string][] = [
     ["Site", hostname],
     ["Status", d.label],
-    ["Plan", `${planTitle || plan}${lifecycle.monthly_price ? ` · ${lifecycle.monthly_price} SAR / month` : ""}`],
-    ["Trial", `${fmtDate(lifecycle.trial_started_at)} to ${fmtDate(lifecycle.trial_ends_at)}`],
+    ["Plan", `${planTitle || plan}${lifecycle.period_price ? ` · ${lifecycle.period_price} SAR / ${lifecycle.billing_period === "Yearly" ? "year" : "month"}` : ""}`],
+    ["Billing", lifecycle.billing_period === "Yearly" ? "Yearly" : "Monthly"],
+    ...(lifecycle.trial_started_at ? ([["Trial", `${fmtDate(lifecycle.trial_started_at)} to ${fmtDate(lifecycle.trial_ends_at)}`]] as [string, string][]) : []),
     ...(lifecycle.remaining_days !== null ? ([["Days left", String(lifecycle.remaining_days)]] as [string, string][]) : []),
     ["Next billing", lifecycle.next_billing_date || "-"],
     ["Last activity", `${fmtDate(lifecycle.last_activity_at)} (${inactivityPhrase(lifecycle)})`],
@@ -148,7 +149,7 @@ export function LifecycleCard({
         </dl>
 
         <div className="mt-4 flex flex-wrap gap-2">
-          {d.canActivate && (
+          {d.canActivate && !lifecycle.protected && (
             <Button onClick={() => { setError(null); setNotice(null); setShowCheckout(true); }} disabled={busy}>
               {d.actionLabel}
             </Button>

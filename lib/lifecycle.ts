@@ -21,6 +21,12 @@ export type Lifecycle = {
   lifecycle_status: LifecycleStatus | null;
   plan: string | null;
   monthly_price: number | null;
+  yearly_price?: number | null;
+  /** Set by an admin on the platform; one payment buys one period. Absent (older platform) means Monthly. */
+  billing_period?: "Monthly" | "Yearly";
+  period_price?: number | null;
+  /** A real company site Space only tracks: shows a neutral "Active" badge, has no trial and nothing to pay. */
+  protected?: boolean;
   trial_started_at: string | null;
   trial_ends_at: string | null;
   remaining_days: number | null;
@@ -69,8 +75,20 @@ export function describeLifecycle(v: Lifecycle | null | undefined, nowMs: number
         canActivate: true,
         actionLabel: "Activate subscription",
       };
-    case "ACTIVE":
-      return { label: "Active", tone: "success", headline: v.next_billing_date ? `Next billing ${v.next_billing_date}` : "Subscription active", canActivate: !!v.paid_until, actionLabel: "Pay next month" };
+    case "ACTIVE": {
+      if (v.protected) {
+        return { label: "Active", tone: "success", headline: "ZatGo ERP site: active.", canActivate: false, actionLabel: "" };
+      }
+      const yearly = v.billing_period === "Yearly";
+      const period = yearly ? "Yearly" : "Monthly";
+      return {
+        label: "Active",
+        tone: "success",
+        headline: v.next_billing_date ? `${period} · renews ${v.next_billing_date}` : `${period} subscription active`,
+        canActivate: !!v.paid_until,
+        actionLabel: yearly ? "Pay next year" : "Pay next month",
+      };
+    }
     case "EXPIRED":
       return { label: "Read-only", tone: "danger", headline: "Trial ended: your data is safe and viewable, editing is off.", canActivate: true, actionLabel: "Activate subscription" };
     case "PENDING_PAYMENT":

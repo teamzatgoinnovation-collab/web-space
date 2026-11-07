@@ -71,3 +71,27 @@ test("lifecycle merges onto site rows by name, without leaking between sites", (
   assert.equal(merged[1].lifecycle, null);
   assert.equal(mergeLifecycle(rows, null)[0].lifecycle, null);
 });
+
+test("an active yearly site says Yearly and offers the yearly renewal", () => {
+  const v = describeLifecycle(
+    { ...base, lifecycle_status: "ACTIVE", billing_period: "Yearly", paid_until: "2027-11-07T00:00:00Z", next_billing_date: "2027-11-07" },
+    at("2026-11-07T12:00:00Z"),
+  );
+  assert.equal(v?.tone, "success");
+  assert.match(v!.headline, /Yearly · renews 2027-11-07/);
+  assert.equal(v?.actionLabel, "Pay next year");
+  assert.equal(v?.canActivate, true);
+});
+
+test("a monthly site (or an older platform without the field) stays monthly", () => {
+  const v = describeLifecycle({ ...base, lifecycle_status: "ACTIVE", paid_until: "2026-12-07T00:00:00Z", next_billing_date: "2026-12-07" }, at("2026-11-07T12:00:00Z"));
+  assert.match(v!.headline, /Monthly · renews 2026-12-07/);
+  assert.equal(v?.actionLabel, "Pay next month");
+});
+
+test("a protected company site shows a neutral Active badge with nothing to pay", () => {
+  const v = describeLifecycle({ ...base, lifecycle_status: "ACTIVE", protected: true, trial_started_at: null, trial_ends_at: null }, at("2026-11-07T12:00:00Z"));
+  assert.equal(v?.label, "Active");
+  assert.equal(v?.tone, "success");
+  assert.equal(v?.canActivate, false);
+});

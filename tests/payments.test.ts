@@ -124,3 +124,13 @@ test("billing: a free plan is offered even with no providers configured", async 
     keys.forEach((k, i) => (saved[i] === undefined ? delete process.env[k] : (process.env[k] = saved[i])));
   }
 });
+
+test("pricing: a yearly period costs ten months by default and can be overridden", () => {
+  assert.equal(priceCents("pro", "SAR", {}, "Monthly"), 4900);
+  assert.equal(priceCents("pro", "SAR", {}, "Yearly"), 49000);
+  assert.equal(priceCents("enterprise", "SAR", {}, "Yearly"), 199000);
+  assert.equal(priceCents("pro", "SAR", { PLAN_YEARLY_PRICES_JSON: '{"pro":{"SAR":45000}}' }, "Yearly"), 45000);
+  assert.equal(priceCents("pro", "SAR", { PLAN_YEARLY_PRICES_JSON: "not json" }, "Yearly"), 49000);
+  assert.equal(priceCents("basic", "SAR", {}, "Yearly"), 0);
+  assert.equal(priceCents("nope", "SAR", {}, "Yearly"), undefined);
+});

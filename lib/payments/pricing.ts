@@ -8,6 +8,11 @@ export const CURRENCIES: Currency[] = ["SAR", "INR", "USD"];
  * Override without a deploy via the PLAN_PRICES_JSON env var, e.g.
  * {"pro":{"SAR":4900,"INR":99900,"USD":1300}}.
  */
+export type BillingPeriod = "Monthly" | "Yearly";
+
+/** A year costs ten months unless PLAN_YEARLY_PRICES_JSON says otherwise (matches the platform's seeded yearly prices). */
+const YEARLY_MONTHS = 10;
+
 const DEFAULT_PRICES: Record<string, Partial<Record<Currency, number>>> = {
   basic: { SAR: 0, INR: 0, USD: 0 },
   pro: { SAR: 4900, INR: 99900, USD: 1300 },
@@ -24,14 +29,29 @@ function overrides(env: Record<string, string | undefined>) {
   }
 }
 
-/** Price in minor units, or undefined when the plan has no price in that currency. */
+function yearlyOverrides(env: Record<string, string | undefined>) {
+  try {
+    return JSON.parse(env.PLAN_YEARLY_PRICES_JSON || "{}") as typeof DEFAULT_PRICES;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Price in minor units for one billing period (a month, or a year), or undefined when the plan has no price in that
+ * currency. The period is decided by the platform for the site (never by the browser).
+ */
 export function priceCents(
   planCode: string,
   currency: Currency,
   env: Record<string, string | undefined> = process.env,
+  period: BillingPeriod = "Monthly",
 ): number | undefined {
-  const v = overrides(env)[planCode]?.[currency] ?? DEFAULT_PRICES[planCode]?.[currency];
-  return typeof v === "number" && v >= 0 ? v : undefined;
+  const monthly = overrides(env)[planCode]?.[currency] ?? DEFAULT_PRICES[planCode]?.[currency];
+  if (typeof monthly !== "number" || monthly < 0) return undefined;
+  if (period !== "Yearly") return monthly;
+  const yearly = yearlyOverrides(env)[planCode]?.[currency];
+  return typeof yearly === "number" && yearly >= 0 ? yearly : monthly * YEARLY_MONTHS;
 }
 
 export function formatMoney(cents: number, currency: Currency): string {

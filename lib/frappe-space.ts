@@ -106,7 +106,6 @@ export async function frappeRecordPayment(p: {
     payment_id: p.paymentId,
     amount: p.amount,
     currency: p.currency,
-    months: 1,
   });
 }
 

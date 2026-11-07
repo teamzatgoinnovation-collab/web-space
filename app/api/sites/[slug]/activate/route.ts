@@ -34,9 +34,11 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
 
   try {
     // Ownership: the customer's own session must be allowed to see this site's lifecycle.
-    await callMethod("space.api.lifecycle.get_lifecycle", { site: slug }, sid);
+    const lifecycle = await callMethod<{ billing_period?: string } | null>("space.api.lifecycle.get_lifecycle", { site: slug }, sid);
+    // The platform decides the period (an admin sets it); the payment must match that period's price.
+    const period = lifecycle?.billing_period === "Yearly" ? "Yearly" : "Monthly";
 
-    const paid = await assertPaidCheckout({ sessionId, plan, purpose: "activate", hostname: slug, currency: parsed.data.currency });
+    const paid = await assertPaidCheckout({ sessionId, plan, purpose: "activate", hostname: slug, currency: parsed.data.currency, period });
     if (!paid.ok) return NextResponse.json({ ok: false, error: paid.error }, { status: 402 });
     if (paid.session.id.startsWith("free_")) {
       return NextResponse.json({ ok: false, error: "A free checkout cannot activate a subscription." }, { status: 400 });
@@ -44,7 +46,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
 
     const { provider, payload: paymentId } = splitSessionId(paid.session.id);
     const currency = (parsed.data.currency || "SAR") as Currency;
-    const cents = priceCents(plan, currency) ?? 0;
+    const cents = priceCents(plan, currency, process.env, period) ?? 0;
     const result = await frappeRecordPayment({ site: slug, provider, paymentId, amount: cents / 100, currency });
     return NextResponse.json({ ok: true, data: result });
   } catch (e) {
